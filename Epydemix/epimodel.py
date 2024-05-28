@@ -1,5 +1,6 @@
 # libraries
 from .transition import Transition
+from .utils import compute_quantiles
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
@@ -129,13 +130,31 @@ class EpiModel:
         for date in simulation_dates:
             if intervention["start_date"] <= date <= intervention["end_date"]:
                 if intervention["reduction_factor"] is not None:
-                    self.Cs[date][intervention["layer"]] *= intervention["reduction_factor"]
+                    self.Cs[date][intervention["layer"]] = intervention["reduction_factor"] * self.Cs[date][intervention["layer"]]
+
                 elif intervention["new_matrix"] is not None:
                     self.Cs[date][intervention["layer"]] = intervention["new_matrix"]
 
-        
-    def simulate(self, population, start_date, end_date, steps, Nsim=100): 
 
+    def simulate(self, population, start_date, end_date, steps, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], **kwargs): 
+        """
+        Simulates the epidemic model over the given time period.
+
+        Parameters:
+        -----------
+            - population (object): An object containing population data, particularly the contact matrices and demographic groups.
+            - start_date (str or pd.Timestamp): The start date of the simulation.
+            - end_date (str or pd.Timestamp): The end date of the simulation.
+            - steps (int): The number of time steps in the simulation.
+            - Nsim (int, optional): The number of simulation runs to perform (default is 100).
+            - quantiles (list of float, optional): A list of quantiles to compute for the simulation results (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
+            - **kwargs: Additional arguments to pass to the stochastic simulation function.
+
+        Returns:
+        --------
+            - simulated_compartments (list of np.ndarray): The results of the simulated compartments for each run.
+            - df_quantiles (pd.DataFrame): A DataFrame containing the quantile values for each compartment, demographic group, and date.
+        """
         start_date, end_date = pd.to_datetime(start_date), pd.to_datetime(end_date)
         simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
 
@@ -148,73 +167,89 @@ class EpiModel:
         for date in self.Cs.keys(): 
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
 
+        # compartments names and positions
+        self.compartments_idx = {comp: i for i, comp in enumerate(self.compartments)}
+
+        # simulate
+        simulated_compartments = []
+        for i in range(Nsim): 
+            simulated_compartments.append(self.stochastic_simulation(population.Nk, self.Cs, **kwargs))
+
+        df_quantiles = compute_quantiles(population.Nk_names, self.compartments_idx, simulated_compartments, simulation_dates, quantiles=quantiles)
+        return simulated_compartments, df_quantiles
 
 
+    def stochastic_simulation(self, Nk, Cs, **kwargs): 
+        """
+        Run a stochastic simulation of the epidemic model over the specified time period.
 
+        Parameters:
+        -----------
+            - Nk (np.ndarray): An array representing the population in different demographic groups.
+            - Cs (dict): A dictionary of contact matrices, where keys are dates and values are dictionaries 
+                        containing layer matrices, including an "overall" matrix.
+            - **kwargs: Additional named arguments representing initial populations in different compartments.
+                        Each key should be the name of a compartment and the value should be the initial population array
+                        for that compartment.
 
-"""
-
-    def stochastic_simulation(self, population, Cs, **kwargs): 
+        Returns:
+        --------
+            - np.ndarray: A 3D array representing the evolution of compartment populations over time. The shape of the 
+                        array is (time_steps, num_compartments, num_demographic_groups).
+        """
         
+        # population in different compartments and demographic groups
+        compartments_population = np.zeros((len(self.compartments), len(Nk)), dtype='int')
+        for comp in kwargs:
+            compartments_population[self.compartments_idx[comp]] = kwargs[comp]
+        compartments_evolution = [compartments_population]     
 
+        # simulate
+        for date in Cs.keys():
 
-            # population in different compartments and demographic groups
-            population = np.zeros((len(self.compartments), self.Nk), dtype='int')
-            for comp in kwargs:
-                population[self.pos[comp]] = kwargs[comp]
+            # get today contacts matrix and seasonality adjustment
+            C = Cs[date]["overall"]
 
-            compartments = [population]            # evolution of individuals in different compartments (t, n_comp, n_age)
-            comps = list(self.transitions.nodes)   # compartments names
-            Nk = population.sum(axis=0)            # total population per age groups
+            # last time step population in different compartments (n_comp, n_age)
+            pop = compartments_evolution[-1]
+            # next step solution
+            new_pop = pop.copy()
+            for comp in self.compartments:
+                # transition (edge) attribute dict in 3-tuple (u, v, ddict) and initialize probabilities
+                trans = self.transitions[comp]
+                prob = np.zeros((len(self.compartments), len(Nk)), dtype='float')
 
-            # simulate
-            for date in Cs.keys():
+                for tr in trans:
+                    # get source, target, and rate for this transition
+                    source = self.compartments_idx[tr.source]
+                    target = self.compartments_idx[tr.target]
+                    rate = tr.rate
 
-                # get today contacts matrix and seasonality adjustment
-                C = Cs[date]["overall"]
+                    # check if this transition has an interaction
+                    if tr.agent is not None:
+                        agent = self.compartments_idx[tr.agent]  # get agent position
+                        interaction = np.array([np.sum(C[age, :] * pop[agent, :] / Nk) for age in range(len(Nk))])
+                        rate *= interaction        # interaction term
+                    prob[target, :] += rate
 
-                # last time step population in different compartments (n_comp, n_age)
-                pop = compartments[-1]
-                # next step solution
-                new_pop = pop.copy()
-                for comp in comps:
-                    # transition (edge) attribute dict in 3-tuple (u, v, ddict) and initialize probabilities
-                    trans = list(self.transitions.edges(comp, data=True))
-                    prob = np.zeros((len(comps), self.n_age), dtype='float')
+                # prob of not transitioning
+                prob[source, :] = 1 - np.sum(prob, axis=0)
 
-                    for _, node_j, data in trans:
-                        # get source, target, and rate for this transition
-                        source = self.pos[comp]
-                        target = self.pos[node_j]
-                        rate = data['rate']
+                # compute transitions
+                delta = np.array([multinomial(pop[source][i], prob[:, i]) for i in range(len(Nk))])
+                delta[:, source] = 0
+                changes = np.sum(delta)
 
-                        # check if this transition has an interaction
-                        if 'agent' in data.keys():
-                            agent = self.pos[data['agent']]  # get agent position
-                            interaction = np.array([np.sum(C[age, :] * pop[agent, :] / Nk) for age in range(self.n_age)])
-                            rate *= interaction        # interaction term
-                        prob[target, :] += rate
+                # if no changes continue to next iteration
+                if changes == 0:
+                    continue
 
-                    # prob of not transitioning
-                    prob[source, :] = 1 - np.sum(prob, axis=0)
+                # update population of source of transition
+                new_pop[source, :] -= np.sum(delta, axis=1)
 
-                    # compute transitions
-                    delta = np.array([multinomial(pop[source][i], prob[:, i]) for i in range(self.n_age)])
-                    delta[:, source] = 0
-                    changes = np.sum(delta)
+                # update target compartments population
+                new_pop += delta.T
 
-                    # if no changes continue to next iteration
-                    if changes == 0:
-                        continue
+            compartments_evolution.append(new_pop)
 
-                    # update population of source of transition
-                    new_pop[source, :] -= np.sum(delta, axis=1)
-
-                    # update target compartments population
-                    new_pop += delta.T
-
-                compartments.append(new_pop)
-
-            return np.array(compartments)
-
-"""
+        return np.array(compartments_evolution)[1:]

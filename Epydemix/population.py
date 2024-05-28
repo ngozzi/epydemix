@@ -19,7 +19,8 @@ class Population:
         """
         self.name = name
         self.contact_matrices = {}  # Dictionary to hold contact matrices for different layers
-        self.Nk = []  # Population data
+        self.Nk = []                # Population data
+        self.Nk_names = []          # list of demographic group names
 
 
     def add_contact_matrix(self, contact_matrix, layer_name="all"):
@@ -34,7 +35,7 @@ class Population:
         self.contact_matrices[layer_name] = contact_matrix
 
 
-    def add_population(self, Nk): 
+    def add_population(self, Nk, Nk_names=None): 
         """
         Adds population data.
         -----------
@@ -42,6 +43,10 @@ class Population:
             - Nk (list): Population data array.
         """
         self.Nk = Nk
+        if Nk_names is None:
+            self.Nk_names = list(range(len(Nk)))
+        else: 
+            self.Nk_names = Nk_names
 
 
     def update_contacts(self, date):
