@@ -10,22 +10,21 @@ import os
 from collections import OrderedDict
 from datetime import date, timedelta
 
-class Epydemix:
+class EpiModel:
     """
-    Epydemix Class
+    EpiModel Class
     """
 
-    def __init__(self, 
-                 basin_name = "Indonesia", 
-                 path_to_data = "./basins"):
+    def __init__(self):
         """
-        Epydemix constructor
+        EpiModel constructor
         """
         self.transitions = nx.MultiDiGraph()
-        self.basin = Basin(name=basin_name, path_to_data=path_to_data)
-        self.n_age = self.basin.contacts_matrix.shape[0]
-        self.initialize_contacts(date.today() - timedelta(days=365), date.today())
         self.interventions = []
+        #self.basin = Basin(name=basin_name, path_to_data=path_to_data)
+        #self.n_age = self.basin.contacts_matrix.shape[0]
+        #self.initialize_contacts(date.today() - timedelta(days=365), date.today())
+        #self.interventions = []
            
     def __repr__(self):
         text = 'Epidemic Model with %u compartments and %u transitions:\n\n' % \
