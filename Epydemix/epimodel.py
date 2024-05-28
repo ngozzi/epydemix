@@ -174,6 +174,7 @@ class EpiModel:
         simulated_compartments = []
         for i in range(Nsim): 
             simulated_compartments.append(self.stochastic_simulation(population.Nk, self.Cs, **kwargs))
+        simulated_compartments = np.array(simulated_compartments)
 
         df_quantiles = compute_quantiles(population.Nk_names, self.compartments_idx, simulated_compartments, simulation_dates, quantiles=quantiles)
         return simulated_compartments, df_quantiles

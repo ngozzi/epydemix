@@ -31,8 +31,8 @@ def compute_quantiles(dem_group_names, compartments_idx, simulated_compartments,
         # Compute quantiles for each specified quantile level
         for q in quantiles:
             # Compute quantiles for each demographic group
-            for group in dem_group_names:
-                arr = np.quantile(simulated_compartments[:, :, comp_idx, group], q=q, axis=0)
+            for g, group in enumerate(dem_group_names):
+                arr = np.quantile(simulated_compartments[:, :, comp_idx, g], q=q, axis=0)
                 
                 # Extend results to lists
                 compartment_values.extend(arr)
