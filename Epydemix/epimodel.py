@@ -19,6 +19,7 @@ class EpiModel:
         self.transitions_list = []
         self.interventions = []
         self.compartments = []
+        self.parameters = {}
         self.add_compartments(compartments)
 
 
@@ -39,7 +40,17 @@ class EpiModel:
             self.transitions[compartments] = []
 
 
-    def add_transition(self, source, target, rate, rate_name, agent=None):
+    def add_parameters(self, parameters):
+        """
+        Add new parameters to the epidemic model.
+
+        Parameters: 
+            - parameters (dict): A dictionary of parameters
+        """
+        self.parameters.update(parameters)
+
+
+    def add_transition(self, source, target, rate_name, agent=None):
         """
         Adds a transition to the epidemic model.
 
@@ -47,8 +58,8 @@ class EpiModel:
         -----------
             - source (str): The source compartment of the transition.
             - target (str): The target compartment of the transition.
-            - rate (float): The rate at which the transition occurs.
             - rate_name (str): The name of the rate for the transition.
+            - rate (float, optional): The rate at which the transition occurs (default is None).
             - agent (str, optional): The interacting agent for the transition (default is None).
 
         Raises:
@@ -60,8 +71,12 @@ class EpiModel:
         missing_compartments = [comp for comp in [source, target, agent] if comp and comp not in self.compartments]
         if missing_compartments:
             raise ValueError(f"These compartments are not in the compartments list: {', '.join(missing_compartments)}")
+        
+        # Check that the rate of the transition has been added to the parameters
+        if rate_name not in self.parameters.keys(): 
+            raise ValueError(f"{rate_name} of the transition has been added to the parameters")
 
-        transition = Transition(source=source, target=target, rate=rate, rate_name=rate_name, agent=agent)
+        transition = Transition(source=source, target=target, rate_name=rate_name, agent=agent)
 
         # Append to transitions list
         self.transitions_list.append(transition)
@@ -224,7 +239,7 @@ class EpiModel:
                     # get source, target, and rate for this transition
                     source = self.compartments_idx[tr.source]
                     target = self.compartments_idx[tr.target]
-                    rate = tr.rate
+                    rate = self.parameters[tr.rate_name]
 
                     # check if this transition has an interaction
                     if tr.agent is not None:
