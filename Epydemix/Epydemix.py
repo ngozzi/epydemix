@@ -5,7 +5,7 @@ from numpy.random import multinomial
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-from Basin import Basin
+from .population import Population
 import os 
 from collections import OrderedDict
 from datetime import date, timedelta
