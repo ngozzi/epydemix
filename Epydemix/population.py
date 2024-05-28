@@ -33,6 +33,7 @@ class Population:
         """
         self.contact_matrices[layer_name] = contact_matrix
 
+
     def add_population(self, Nk): 
         """
         Adds population data.
@@ -41,6 +42,7 @@ class Population:
             - Nk (list): Population data array.
         """
         self.Nk = Nk
+
 
     def update_contacts(self, date):
         """
@@ -63,6 +65,7 @@ class Population:
         except IndexError:
             raise ValueError(f"Reduction factor for date {date} not found.")
         return reduction_factor * self.contact_matrices.get("all", np.zeros_like(self.Nk))
+
 
     def compute_contacts(self, start_date, end_date):
         """
