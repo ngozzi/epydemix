@@ -19,6 +19,7 @@ class EpiModel:
         self.transitions_list = []
         self.interventions = []
         self.compartments = []
+        self.compartments_idx = {}
         self.parameters = {}
         self.add_compartments(compartments)
 
@@ -33,11 +34,22 @@ class EpiModel:
         """
         if isinstance(compartments, list):
             self.compartments.extend(compartments)
-            for compartment in compartments:
+            if len(self.compartments_idx.values()) == 0: 
+                max_idx = -1
+            else:
+                max_idx = max(self.compartments_idx.values())
+            for i, compartment in enumerate(compartments):
                 self.transitions[compartment] = []
+                self.compartments_idx[compartment] = max_idx + (i + 1)
+
         else:
             self.compartments.append(compartments)
             self.transitions[compartments] = []
+            if len(self.compartments_idx.values()) == 0: 
+                max_idx = -1
+            else:
+                max_idx = max(self.compartments_idx.values())
+            self.compartments_idx[compartments] = max_idx + 1
 
 
     def add_parameters(self, parameters):
@@ -181,9 +193,6 @@ class EpiModel:
         # compute overall contacts
         for date in self.Cs.keys(): 
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
-
-        # compartments names and positions
-        self.compartments_idx = {comp: i for i, comp in enumerate(self.compartments)}
 
         # simulate
         simulated_compartments = []
