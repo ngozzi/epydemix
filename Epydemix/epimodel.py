@@ -164,6 +164,22 @@ class EpiModel:
 
 
     def compute_contact_reductions(self, population, simulation_dates): 
+        """
+        Computes the contact reductions for a population over the given simulation dates.
+
+        This function applies interventions to the contact matrices and computes the overall contact matrix for each date
+        in the simulation period.
+
+        Parameters:
+        -----------
+            - population (object): An object containing population data, particularly the contact matrices.
+            - simulation_dates (list of pd.Timestamp): A list of dates over which the simulation is run.
+
+        Returns:
+        --------
+            - None: The function updates the instance variable `self.Cs` with the contact matrices for each date, 
+                    including the overall contact matrix after applying interventions.
+        """
         # apply interventions
         self.Cs = {date: {l: c for l, c in population.contact_matrices.items()} for date in simulation_dates}
         for intervention in self.interventions:
@@ -203,17 +219,23 @@ class EpiModel:
         parameters = {"Nk": population.Nk, "Cs": self.Cs}
         parameters.update(self.parameters)
 
+        # add initial conditions to parameters
+        for comp in kwargs: 
+            parameters[comp] = kwargs[comp]
+
+        parameters["epimodel"] = self
+
         # simulate
         simulated_compartments = []
         for i in range(Nsim): 
-            simulated_compartments.append(stochastic_simulation(self, parameters=parameters, **kwargs))
+            simulated_compartments.append(stochastic_simulation(parameters=parameters))
         simulated_compartments = np.array(simulated_compartments)
 
         df_quantiles = compute_quantiles(population.Nk_names, self.compartments_idx, simulated_compartments, simulation_dates, quantiles=quantiles)
         return simulated_compartments, df_quantiles
 
 
-def stochastic_simulation(epimodel, parameters, **kwargs): 
+def stochastic_simulation(parameters): 
     """
     Run a stochastic simulation of the epidemic model over the specified time period.
 
@@ -231,11 +253,13 @@ def stochastic_simulation(epimodel, parameters, **kwargs):
         - np.ndarray: A 3D array representing the evolution of compartment populations over time. The shape of the 
                     array is (time_steps, num_compartments, num_demographic_groups).
     """
+
+    epimodel = parameters["epimodel"]
     
     # population in different compartments and demographic groups
     compartments_population = np.zeros((len(epimodel.compartments), len(parameters["Nk"])), dtype='int')
-    for comp in kwargs:
-        compartments_population[epimodel.compartments_idx[comp]] = kwargs[comp]
+    for comp in epimodel.compartments:
+        compartments_population[epimodel.compartments_idx[comp]] = parameters[comp]
     compartments_evolution = [compartments_population]     
 
     # simulate
