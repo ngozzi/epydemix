@@ -3,7 +3,8 @@ import numpy as np
 
 def calibration(epimodel, 
                 data, 
-                priors): 
+                priors, 
+                parameters): 
     
     """
     Parameters
