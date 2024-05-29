@@ -1,7 +1,14 @@
-def calibration(simulation_function, 
+import numpy as np 
+
+def rmse(data, simulation): 
+    return np.sqrt(np.mean((data["data"] - simulation["data"])**2))
+
+def calibration_top_perc(simulation_function, 
                 priors, 
                 parameters, 
                 data=None,
+                top_perc=0.05,
+                error_metric=rmse,
                 Nsim=100): 
     
     """
@@ -9,7 +16,7 @@ def calibration(simulation_function,
         - priors (dict): dictionary of prior distributions
     """
     
-    simulations = []
+    simulations, errors = [], []
     sampled_params = {p: [] for p in priors.keys()}
     for n in range(Nsim):
 
@@ -21,5 +28,16 @@ def calibration(simulation_function,
 
         results = simulation_function(parameters)
         simulations.append(results)
+        errors.append(error_metric(data=data, simulation=results))
 
-    return simulations, sampled_params
+    # compute error threshold
+    err_threshold = np.quantile(errors, q=top_perc)
+    idxs = np.argwhere(np.array(errors) <= err_threshold).ravel()
+
+    # select runs 
+    selected_simulations = np.array(simulations)[idxs]
+
+    # select parameters
+    selected_params = {p: np.array(arr)[idxs] for p, arr in sampled_params.items()}
+
+    return selected_simulations, selected_params
