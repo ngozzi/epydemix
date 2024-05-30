@@ -6,6 +6,7 @@
 - add ValueError for protected sympy rate names
 - give a name to inteventions (related to plotting below)
 - add possibility to add daily steps
+- parallelization
 
 ## Calibration 
 - implementation of the simple rejection algorithm 
@@ -13,6 +14,7 @@
 - additional functionalities for the top_perc approach: 
     - returns all the runs 
     - select top_perc runs a posteriori
+- parallelization also on more simple calibrations
 
 ## Plotting 
 - plot spectral radius or something related to the interventions
