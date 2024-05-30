@@ -20,7 +20,7 @@ def get_timeseries_data(df_quantiles, column, quantile):
     return df_quantiles.loc[(df_quantiles["quantile"] == quantile)][["date", column]]
 
 
-def plot_quantiles(df_quantiles, columns, ax=None,
+def plot_quantiles(results, columns, ax=None,
                    lower_q=0.05, upper_q=0.95, show_median=True, 
                    ci_alpha=0.3, title="", show_legend=True, 
                    palette="Set2"):
@@ -29,7 +29,7 @@ def plot_quantiles(df_quantiles, columns, ax=None,
 
     Parameters:
     -----------
-        - df_quantiles (pd.DataFrame): DataFrame containing quantile data for compartments and demographic groups.
+        - results (SimulationResults): An object containing the simulation results
         - compartment (list or str): The names of the compartment to plot data for.
         - demographic_group (list or str or int): The demographic groups to plot data for.
         - ax (matplotlib.axes.Axes, optional): The axes to plot on. If None, a new figure and axes are created.
@@ -42,6 +42,8 @@ def plot_quantiles(df_quantiles, columns, ax=None,
         - show_legend (bool, optional): Whether to show legend (default is True).
         - palette (str, optional): The color palette for the plot (default is "Set2")
     """
+    
+    df_quantiles = results.get_df_quantiles()
     
     if not isinstance(columns, list):
         columns = [columns]

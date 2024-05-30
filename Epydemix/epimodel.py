@@ -1,6 +1,7 @@
 # libraries
 from .transition import Transition
 from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs
+from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
@@ -240,9 +241,17 @@ class EpiModel:
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
         simulated_compartments = {k: np.array(v) for k, v in simulated_compartments.items()}
-
         df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles)
-        return simulated_compartments, df_quantiles
+        
+        # format simulation results 
+        simulation_results = SimulationResults() 
+        simulation_results.set_Nsim(Nsim)
+        simulation_results.set_df_quantiles(df_quantiles)
+        simulation_results.set_full_trajectories(simulated_compartments)
+        simulation_results.set_compartment_idx(self.compartments_idx)
+        simulation_results.set_parameters(parameters)
+
+        return simulation_results
     
 
     def evaluate_transition(self, parameters): 
