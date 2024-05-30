@@ -4,7 +4,7 @@ from .utils import compute_quantiles
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
-from datetime import datetime
+from datetime import timedelta
 
 class EpiModel:
     """
@@ -190,7 +190,7 @@ class EpiModel:
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
 
 
-    def simulate(self, population, start_date, end_date, steps, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], **kwargs): 
+    def simulate(self, population, start_date, end_date, steps, dt=None, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], **kwargs): 
         """
         Simulates the epidemic model over the given time period.
 
@@ -200,6 +200,7 @@ class EpiModel:
             - start_date (str or pd.Timestamp): The start date of the simulation.
             - end_date (str or pd.Timestamp): The end date of the simulation.
             - steps (int): The number of time steps in the simulation.
+            - dt (float): The length of the simulation step referred to 1 day (default is None).
             - Nsim (int, optional): The number of simulation runs to perform (default is 100).
             - quantiles (list of float, optional): A list of quantiles to compute for the simulation results (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
             - **kwargs: Additional arguments to pass to the stochastic simulation function.
@@ -225,6 +226,12 @@ class EpiModel:
 
         parameters["epimodel"] = self
 
+        # simulation dt 
+        if dt is None:
+            parameters["dt"] = np.diff(simulation_dates)[0] / timedelta(days=1)
+        else: 
+            parameters["dt"] = dt
+            
         # simulate
         simulated_compartments = []
         for i in range(Nsim): 
@@ -235,7 +242,7 @@ class EpiModel:
         return simulated_compartments, df_quantiles
 
 
-def stochastic_simulation(parameters): 
+def stochastic_simulation(parameters, post_processing_function=lambda x, **kwargs: x): 
     """
     Run a stochastic simulation of the epidemic model over the specified time period.
 
@@ -244,6 +251,7 @@ def stochastic_simulation(parameters):
         - Nk (np.ndarray): An array representing the population in different demographic groups.
         - Cs (dict): A dictionary of contact matrices, where keys are dates and values are dictionaries 
                     containing layer matrices, including an "overall" matrix.
+        - post_processing_function=lambda x: x (function): A function that manipulates the output of the simulation (default is an identity function).
         - **kwargs: Additional named arguments representing initial populations in different compartments.
                     Each key should be the name of a compartment and the value should be the initial population array
                     for that compartment.
@@ -288,7 +296,10 @@ def stochastic_simulation(parameters):
                     agent = epimodel.compartments_idx[tr.agent]  # get agent position
                     interaction = np.array([np.sum(C[age, :] * pop[agent, :] / parameters["Nk"]) for age in range(len(parameters["Nk"]))])
                     rate *= interaction        # interaction term
-                prob[target, :] += rate
+                prob[target, :] += rate * parameters["dt"]
+
+            # exponential of 
+            prob = 1 - np.exp(-prob)
 
             # prob of not transitioning
             prob[source, :] = 1 - np.sum(prob, axis=0)
@@ -310,4 +321,6 @@ def stochastic_simulation(parameters):
 
         compartments_evolution.append(new_pop)
 
-    return np.array(compartments_evolution)[1:]
+    # apply post_processing 
+    results = post_processing_function(np.array(compartments_evolution)[1:], **parameters)
+    return results

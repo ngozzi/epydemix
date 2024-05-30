@@ -9,7 +9,8 @@ def calibration_top_perc(simulation_function,
                 data=None,
                 top_perc=0.05,
                 error_metric=rmse,
-                Nsim=100): 
+                Nsim=100, 
+                post_processing_function=None): 
     
     """
     Parameters
@@ -26,7 +27,11 @@ def calibration_top_perc(simulation_function,
             sampled_params[param].append(rv)
             parameters[param] = rv
 
-        results = simulation_function(parameters)
+        if post_processing_function is None:
+            results = simulation_function(parameters)
+        else: 
+            results = simulation_function(parameters, post_processing_function=post_processing_function)
+            
         simulations.append(results)
         errors.append(error_metric(data=data, simulation=results))
 
