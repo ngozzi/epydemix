@@ -5,7 +5,6 @@
 - rates that are arrays (different for each demographic, such as IFR)
 - add ValueError for protected sympy rate names
 - give a name to inteventions (related to plotting below)
-- add possibility to add daily steps
 - parallelization
 
 ## Calibration 
