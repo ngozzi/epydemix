@@ -1,63 +1,90 @@
 import numpy as np 
 import pandas as pd
 
-
-def compute_quantiles(dem_group_names, compartments_idx, simulated_compartments, simulation_dates, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]):
+def compute_quantiles(data, simulation_dates, axis=0, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]):
     """
-    Computes quantiles for the simulated compartments over the simulation dates.
+    Computes the specified quantiles for each key in the provided data over the given dates.
 
     Parameters:
     -----------
-        - dem_group_names (list): The names of the demographic groups.
-        - compartments_idx (dict): The indices of the compartments.
-        - simulated_compartments (list): A list of simulated compartment values.
-        - simulation_dates (list of pd.Timestamp): The dates over which the simulation runs.
-        - quantiles (list of float, optional): A list of quantiles to compute (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
+        - data (dict of np.ndarray): A dictionary where keys represent different data categories (e.g., compartments, demographic groups) 
+                                   and values are arrays containing the simulation results.
+        - simulation_dates (list of str or pd.Timestamp): The dates corresponding to the simulation time steps.
+        - axis (int, optional): The axis along which to compute the quantiles (default is 0).
+        - quantiles (list of float, optional): A list of quantiles to compute for the simulation results (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
 
     Returns:
     --------
-        - pd.DataFrame: A DataFrame containing the quantile values for each compartment, demographic group, and date.
+        - pd.DataFrame: A DataFrame containing the quantile values for each data category and date.
+                        The DataFrame has columns for the data category, quantile, and date.
     """
-    # Convert simulated compartments to a NumPy array for easier manipulation
-    simulated_compartments = np.array(simulated_compartments)
+    dict_quantiles = {k: [] for k in data.keys()}
+    dict_quantiles["quantile"] = []
+    dict_quantiles["date"] = []
 
-    # Initialize lists to store the results
-    demographic_group, quantile_levels, dates, compartment_values, compartment_names = [], [], [], [], []
+    for q in quantiles:
+        for k, v in data.items():
+            arrq = np.quantile(v, axis=axis, q=q)
+            dict_quantiles[k].extend(arrq)
+        dict_quantiles["quantile"].extend([q] * len(arrq))
+        dict_quantiles["date"].extend(simulation_dates)
 
-    # Iterate over each compartment
-    for comp in compartments_idx.keys():
-        comp_idx = compartments_idx[comp]
-        
-        # Compute quantiles for each specified quantile level
-        for q in quantiles:
-            # Compute quantiles for each demographic group
-            for g, group in enumerate(dem_group_names):
-                arr = np.quantile(simulated_compartments[:, :, comp_idx, g], q=q, axis=0)
-                
-                # Extend results to lists
-                compartment_values.extend(arr)
-                compartment_names.extend([comp] * len(arr))
-                quantile_levels.extend([q] * len(arr))
-                demographic_group.extend([group] * len(arr))
-                dates.extend(simulation_dates)
+    df_quantile = pd.DataFrame(data=dict_quantiles) 
+    return df_quantile
 
-            # Compute quantiles for the total over all demographic groups
-            total_arr = np.quantile(np.sum(simulated_compartments[:, :, comp_idx], axis=2), q=q, axis=0)
-            
-            # Extend results to lists
-            compartment_values.extend(total_arr)
-            compartment_names.extend([comp] * len(total_arr))
-            quantile_levels.extend([q] * len(total_arr))
-            demographic_group.extend(["total"] * len(total_arr))
-            dates.extend(simulation_dates)
 
-    # Create a DataFrame from the results
-    df_quantiles = pd.DataFrame({
-        "date": dates,
-        "demographic_group": demographic_group,
-        "quantile": quantile_levels,
-        "compartment": compartment_names,
-        "value": compartment_values
-    })
+def format_simulation_output(simulation_output, parameters): 
+    """
+    Formats the simulation output into a dictionary with compartment and demographic information.
 
-    return df_quantiles
+    Parameters:
+    -----------
+        - simulation_output (np.ndarray): A 3D array containing the simulation results.
+                                          The dimensions are expected to be (time_steps, compartments, demographics).
+        - parameters (dict): A dictionary containing the simulation parameters.
+                             It must include:
+                             - "epimodel": An object with a `compartments_idx` attribute, which is a dictionary mapping compartment names to their indices.
+                             - "population": An object with a `Nk_names` attribute, which is a list of demographic group names.
+
+    Returns:
+    --------
+        - dict: A dictionary where keys are in the format "compartment_demographic" and values are 2D arrays (time_steps, values).
+                An additional key "compartment_total" is included for each compartment, representing the sum across all demographics.
+    """
+    formatted_output = {}
+    for comp, pos in parameters["epimodel"].compartments_idx.items(): 
+        for i, dem in enumerate(parameters["population"].Nk_names): 
+            formatted_output[f"{comp}_{dem}"] = simulation_output[:, pos, i]
+        formatted_output[f"{comp}_total"] = np.sum(simulation_output[:, pos, :], axis=1)
+
+    return formatted_output
+
+
+def combine_simulation_outputs(combined_simulation_outputs, simulation_outputs):
+    """
+    Combines multiple simulation outputs into a single dictionary by appending new outputs to existing keys.
+
+    Parameters:
+    -----------
+        - combined_simulation_outputs (dict): A dictionary to accumulate combined simulation outputs.
+                                              Keys are compartment-demographic names and values are lists of arrays.
+        - simulation_outputs (dict): A dictionary containing the latest simulation output to be combined.
+                                     Keys are compartment-demographic names and values are arrays of simulation results.
+
+    Returns:
+    --------
+        - dict: A dictionary where keys are compartment-demographic names and values are lists of arrays.
+                Each list contains simulation results accumulated from multiple runs.
+    """
+    if not combined_simulation_outputs:
+        # If combined_dict is empty, initialize it with the new dictionary
+        for key in simulation_outputs:
+            combined_simulation_outputs[key] = [simulation_outputs[key]]
+    else:
+        # If combined_dict already has keys, append the new dictionary's values
+        for key in simulation_outputs:
+            if key in combined_simulation_outputs:
+                combined_simulation_outputs[key].append(simulation_outputs[key])
+            else:
+                combined_simulation_outputs[key] = [simulation_outputs[key]]
+    return combined_simulation_outputs

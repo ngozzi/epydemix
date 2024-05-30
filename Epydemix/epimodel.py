@@ -1,6 +1,6 @@
 # libraries
 from .transition import Transition
-from .utils import compute_quantiles
+from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
@@ -190,7 +190,7 @@ class EpiModel:
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
 
 
-    def simulate(self, population, start_date, end_date, steps, dt=None, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], **kwargs): 
+    def simulate(self, population, start_date, end_date, steps, dt=None, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, **kwargs): 
         """
         Simulates the epidemic model over the given time period.
 
@@ -217,7 +217,7 @@ class EpiModel:
         self.compute_contact_reductions(population, simulation_dates)
 
         # simulation parameters 
-        parameters = {"Nk": population.Nk, "Cs": self.Cs}
+        parameters = {"population": population, "Cs": self.Cs}
         parameters.update(self.parameters)
 
         # add initial conditions to parameters
@@ -231,14 +231,16 @@ class EpiModel:
             parameters["dt"] = np.diff(simulation_dates)[0] / timedelta(days=1)
         else: 
             parameters["dt"] = dt
-            
-        # simulate
-        simulated_compartments = []
-        for i in range(Nsim): 
-            simulated_compartments.append(stochastic_simulation(parameters=parameters))
-        simulated_compartments = np.array(simulated_compartments)
 
-        df_quantiles = compute_quantiles(population.Nk_names, self.compartments_idx, simulated_compartments, simulation_dates, quantiles=quantiles)
+        # simulate
+        simulated_compartments = {}
+        for i in range(Nsim): 
+            results = stochastic_simulation(parameters=parameters, post_processing_function=post_processing_function)
+            simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
+
+        simulated_compartments = {k: np.array(v) for k, v in simulated_compartments.items()}
+
+        df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles)
         return simulated_compartments, df_quantiles
 
 
@@ -265,7 +267,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
     epimodel = parameters["epimodel"]
     
     # population in different compartments and demographic groups
-    compartments_population = np.zeros((len(epimodel.compartments), len(parameters["Nk"])), dtype='int')
+    compartments_population = np.zeros((len(epimodel.compartments), len(parameters["population"].Nk)), dtype='int')
     for comp in epimodel.compartments:
         compartments_population[epimodel.compartments_idx[comp]] = parameters[comp]
     compartments_evolution = [compartments_population]     
@@ -283,7 +285,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
         for comp in epimodel.compartments:
             # transition (edge) attribute dict in 3-tuple (u, v, ddict) and initialize probabilities
             trans = epimodel.transitions[comp]
-            prob = np.zeros((len(epimodel.compartments), len(parameters["Nk"])), dtype='float')
+            prob = np.zeros((len(epimodel.compartments), len(parameters["population"].Nk)), dtype='float')
 
             for tr in trans:
                 # get source, target, and rate for this transition
@@ -294,7 +296,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
                 # check if this transition has an interaction
                 if tr.agent is not None:
                     agent = epimodel.compartments_idx[tr.agent]  # get agent position
-                    interaction = np.array([np.sum(C[age, :] * pop[agent, :] / parameters["Nk"]) for age in range(len(parameters["Nk"]))])
+                    interaction = np.array([np.sum(C[age, :] * pop[agent, :] / parameters["population"].Nk) for age in range(len(parameters["population"].Nk))])
                     rate *= interaction        # interaction term
                 prob[target, :] += rate * parameters["dt"]
 
@@ -305,7 +307,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
             prob[source, :] = 1 - np.sum(prob, axis=0)
 
             # compute transitions
-            delta = np.array([multinomial(pop[source][i], prob[:, i]) for i in range(len(parameters["Nk"]))])
+            delta = np.array([multinomial(pop[source][i], prob[:, i]) for i in range(len(parameters["population"].Nk))])
             delta[:, source] = 0
             changes = np.sum(delta)
 
@@ -321,6 +323,9 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
 
         compartments_evolution.append(new_pop)
 
+    # format simulation output
+    results = format_simulation_output(np.array(compartments_evolution)[1:], parameters)
+
     # apply post_processing 
-    results = post_processing_function(np.array(compartments_evolution)[1:], **parameters)
+    results = post_processing_function(results, **parameters)
     return results

@@ -12,7 +12,7 @@ def get_colors_from_palette(palette_name, n_colors):
     return colors
 
 
-def get_timeseries_data(df_quantiles, compartment, demographic_group, quantile): 
+def get_timeseries_data(df_quantiles, column, quantile): 
     """
     Extracts the time series data for a specific compartment, demographic group, and quantile.
 
@@ -27,11 +27,9 @@ def get_timeseries_data(df_quantiles, compartment, demographic_group, quantile):
     --------
         - pd.DataFrame: A DataFrame containing the time series data for the specified compartment, demographic group, and quantile.
     """
-    return df_quantiles.loc[(df_quantiles.compartment == compartment) & \
-                            (df_quantiles["quantile"] == quantile) & \
-                            (df_quantiles.demographic_group == demographic_group)]
+    return df_quantiles.loc[(df_quantiles["quantile"] == quantile)][["date", column]]
 
-def plot_quantiles(df_quantiles, compartments, demographic_groups, ax=None,
+def plot_quantiles(df_quantiles, columns, ax=None,
                    lower_q=0.05, upper_q=0.95, show_median=True, 
                    ci_alpha=0.3, title="", show_legend=True, 
                    palette="Set2"):
@@ -54,27 +52,23 @@ def plot_quantiles(df_quantiles, compartments, demographic_groups, ax=None,
         - palette (str, optional): The color palette for the plot (default is "Set2")
     """
     
-    if not isinstance(compartments, list):
-        compartments = [compartments]
-
-    if not isinstance(demographic_groups, list):
-        demographic_groups = [demographic_groups]
+    if not isinstance(columns, list):
+        columns = [columns]
 
     if ax is None:
         fig, ax = plt.subplots(dpi=300, figsize=(10,4))
 
-    colors = get_colors_from_palette(palette, len(compartments) * len(demographic_groups))
+    colors = get_colors_from_palette(palette, len(columns))
     t = 0
-    for compartment in compartments:
-        for group in demographic_groups:
-            if show_median:
-                df_med = get_timeseries_data(df_quantiles, compartment, group, 0.5)
-                ax.plot(df_med.date, df_med.value, color=colors[t], label=f"{compartment}_{group}")
+    for column in columns:
+        if show_median:
+            df_med = get_timeseries_data(df_quantiles, column, 0.5)
+            ax.plot(df_med.date, df_med[column].values, color=colors[t], label=column)
 
-            df_q1 = get_timeseries_data(df_quantiles, compartment, group, lower_q)
-            df_q2 = get_timeseries_data(df_quantiles, compartment, group, upper_q)
-            ax.fill_between(df_q1.date, df_q1.value, df_q2.value, alpha=ci_alpha, color=colors[t], linewidth=0.)
-            t += 1
+        df_q1 = get_timeseries_data(df_quantiles, column, lower_q)
+        df_q2 = get_timeseries_data(df_quantiles, column, upper_q)
+        ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values, alpha=ci_alpha, color=colors[t], linewidth=0.)
+        t += 1
 
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
