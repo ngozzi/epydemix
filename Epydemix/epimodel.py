@@ -11,7 +11,7 @@ class EpiModel:
     EpiModel Class
     """
 
-    def __init__(self, compartments=[]):
+    def __init__(self, compartments=[], parameters={}):
         """
         EpiModel constructor
         """
@@ -22,6 +22,7 @@ class EpiModel:
         self.compartments_idx = {}
         self.parameters = {}
         self.add_compartments(compartments)
+        self.add_parameters(parameters)
 
 
     def add_compartments(self, compartments): 

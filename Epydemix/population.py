@@ -1,7 +1,6 @@
-import numpy as np
+import numpy as np 
 import pandas as pd
-from datetime import timedelta, datetime
-from collections import OrderedDict
+import os
 
 
 class Population:
@@ -49,3 +48,10 @@ class Population:
             self.Nk_names = Nk_names
 
 
+    def load_population(self, population_name, path_to_data): 
+        self.name = population_name
+        for layer_name in ["school", "work", "home", "community"]:
+            self.add_contact_matrix(np.load(os.path.join(path_to_data, population_name, f"contacts-matrix/contacts_matrix_{layer_name}.npz"))["arr_0"], layer_name=layer_name)
+
+        Nk = pd.read_csv(os.path.join(path_to_data, population_name, "demographic/Nk.csv"))
+        self.add_population(Nk=Nk["value"].values, Nk_names=Nk["group"].values)
