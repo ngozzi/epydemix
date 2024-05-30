@@ -19,6 +19,7 @@ def get_timeseries_data(df_quantiles, column, quantile):
     """
     return df_quantiles.loc[(df_quantiles["quantile"] == quantile)][["date", column]]
 
+
 def plot_quantiles(df_quantiles, columns, ax=None,
                    lower_q=0.05, upper_q=0.95, show_median=True, 
                    ci_alpha=0.3, title="", show_legend=True, 
@@ -67,3 +68,175 @@ def plot_quantiles(df_quantiles, columns, ax=None,
     ax.set_title(title)
     if show_legend:
         ax.legend(loc="upper left", frameon=False)
+
+
+def plot_selected_quantiles(calibration_results, ax=None, show_data=True, columns="data", 
+                               lower_q=0.05, upper_q=0.95, show_median=True, 
+                               ci_alpha=0.3, title="", show_legend=True, ylabel="", 
+                               palette="Set2"):
+    
+    """
+    Plots the selected quantiles from the calibration results.
+
+    Parameters:
+    -----------
+        calibration_results (CalibrationResults): An object containing the calibration results, including selected quantiles and observed data.
+        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        show_data (bool, optional): Whether to show the observed data points (default is True).
+        columns (str or list of str, optional): The columns to plot from the quantiles data (default is "data").
+        lower_q (float, optional): The lower quantile to plot (default is 0.05).
+        upper_q (float, optional): The upper quantile to plot (default is 0.95).
+        show_median (bool, optional): Whether to show the median line (default is True).
+        ci_alpha (float, optional): The alpha value for the confidence interval shading (default is 0.3).
+        title (str, optional): The title of the plot (default is "").
+        show_legend (bool, optional): Whether to show the legend (default is True).
+        ylabel (str, optional): The label for the y-axis (default is "").
+        palette (str, optional): The color palette to use for the plot (default is "Set2").
+
+    Returns:
+    --------
+        None: This function does not return any values; it produces a plot.
+    """
+    
+    if not isinstance(columns, list):
+        columns = [columns]
+    
+    if ax is None:
+        fig, ax = plt.subplots(dpi=300, figsize=(10,4))
+
+    # get selected quantiles and data
+    df_quantiles = calibration_results.get_selected_quantiles()
+    data = calibration_results.get_data()
+
+    colors = sns.color_palette(palette, len(columns))
+    t = 0
+
+    pleg, handles = [], []
+    for column in columns:
+        if show_median:
+            df_med = get_timeseries_data(df_quantiles, column, 0.5)
+            p1, = ax.plot(df_med.date, df_med[column].values, color=colors[t])
+
+        df_q1 = get_timeseries_data(df_quantiles, column, lower_q)
+        df_q2 = get_timeseries_data(df_quantiles, column, upper_q)
+        p2 = ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values, alpha=ci_alpha, color=colors[t], linewidth=0.)
+        pleg.append((p1, p2))
+        handles.append(f"median ({np.round((1 - lower_q * 2) * 100, 0)}% CI)")
+        t += 1
+
+    if show_data: 
+        p_actual = ax.scatter(df_q1.date, data["data"], s=10, color="k", zorder=1)
+
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.grid(axis="y", linestyle="--", linewidth=0.3)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    if show_legend:
+        ax.legend(pleg + [p_actual], handles + ["actual"], loc="upper left", frameon=False)
+
+
+def plot_posterior(calibration_results, parameter, ax=None, xlabel=None, kind="hist", color="dodgerblue", ylabel="", prior_range=False, **kwargs): 
+    """
+    Plots the posterior distribution of a given parameter from the calibration results.
+
+    Parameters:
+    -----------
+        calibration_results (CalibrationResults): An object containing the calibration results, including the posterior distribution.
+        parameter (str): The parameter to plot from the posterior distribution.
+        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        xlabel (str, optional): The label for the x-axis (default is None).
+        kind (str, optional): The type of plot to generate; options are "hist" for histogram, "kde" for kernel density estimate, and "ecdf" for empirical cumulative distribution function (default is "hist").
+        color (str, optional): The color to use for the plot (default is "dodgerblue").
+        ylabel (str, optional): The label for the y-axis (default is "").
+        prior_range (bool, optional): Whether to set the x-axis limits to the range of the prior distribution (default is False).
+        **kwargs: Additional keyword arguments to pass to the seaborn plotting function.
+
+    Returns:
+    --------
+        None: This function does not return any values; it produces a plot.
+    """
+        
+    if ax is None:
+        fig, ax = plt.subplots(dpi=300, figsize=(10,4))
+
+    df_posterior = calibration_results.get_posterior_distribution()
+    if kind == "hist":
+        sns.histplot(data=df_posterior, x=parameter, ax=ax, color=color, **kwargs)
+    elif kind == "kde": 
+        sns.kdeplot(data=df_posterior, x=parameter, ax=ax, fill=True, color=color, **kwargs)
+    elif kind == "ecdf": 
+        sns.ecdfplot(data=df_posterior, x=parameter, ax=ax, color=color, **kwargs)
+    else: 
+        raise ValueError("Unknown kind for plot: %s" % kind)
+
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+
+    ax.set_ylabel(ylabel)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.grid(axis="y", linestyle="--", linewidth=0.3)
+
+    if prior_range: 
+        xmin, xmax = calibration_results.get_priors()[parameter].ppf(0), calibration_results.get_priors()[parameter].ppf(1)
+        ax.set_xlim(xmin, xmax)
+
+
+def plot_posterior_2d(calibration_results, parameter_x, parameter_y, ax=None, xlabel=None, ylabel=None, kind="hist", palette="Blues", prior_range=False, **kwargs): 
+    """
+    Plots the 2D posterior distribution of two given parameters from the calibration results.
+
+    Parameters:
+    -----------
+        calibration_results (CalibrationResults): An object containing the calibration results, including the posterior distribution.
+        parameter_x (str): The parameter to plot on the x-axis from the posterior distribution.
+        parameter_y (str): The parameter to plot on the y-axis from the posterior distribution.
+        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        xlabel (str, optional): The label for the x-axis (default is None).
+        ylabel (str, optional): The label for the y-axis (default is None).
+        kind (str, optional): The type of plot to generate; options are "hist" for histogram and "kde" for kernel density estimate (default is "hist").
+        palette (str, optional): The color palette to use for the plot (default is "Blues").
+        prior_range (bool, optional): Whether to set the axis limits to the ranges of the prior distributions (default is False).
+        **kwargs: Additional keyword arguments to pass to the seaborn plotting function.
+
+    Returns:
+    --------
+        None: This function does not return any values; it produces a plot.
+    """
+        
+    if ax is None:
+        fig, ax = plt.subplots(dpi=300, figsize=(6,4))
+
+    df_posterior = calibration_results.get_posterior_distribution()
+    if kind == "hist":
+        sns.histplot(data=df_posterior, x=parameter_x, y=parameter_y, ax=ax, palette=palette, **kwargs)
+    elif kind == "kde": 
+        sns.kdeplot(data=df_posterior, x=parameter_x, y=parameter_y, ax=ax, fill=True, palette=palette, **kwargs)
+    else: 
+        raise ValueError("Unknown kind for plot: %s" % kind)
+
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel)
+
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+
+    if prior_range: 
+        xmin, xmax = calibration_results.get_priors()[parameter_x].ppf(0), calibration_results.get_priors()[parameter_x].ppf(1)
+        ymin, ymax = calibration_results.get_priors()[parameter_y].ppf(0), calibration_results.get_priors()[parameter_y].ppf(1)
+
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+
+
+def plot_selected_trajectories(calibration_results, ax=None, show_data=True, columns="data", 
+                               lower_q=0.05, upper_q=0.95, show_median=True, 
+                               ci_alpha=0.3, title="", show_legend=True, ylabel="", 
+                               palette="Set2"):
+    """
+    TODO
+    """
+    return 0
