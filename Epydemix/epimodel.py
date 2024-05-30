@@ -85,10 +85,6 @@ class EpiModel:
         missing_compartments = [comp for comp in [source, target, agent] if comp and comp not in self.compartments]
         if missing_compartments:
             raise ValueError(f"These compartments are not in the compartments list: {', '.join(missing_compartments)}")
-        
-        # Check that the rate of the transition has been added to the parameters
-        if rate_name not in self.parameters.keys(): 
-            raise ValueError(f"{rate_name} of the transition has been added to the parameters")
 
         transition = Transition(source=source, target=target, rate_name=rate_name, agent=agent)
 

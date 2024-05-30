@@ -4,6 +4,7 @@
 - custom interation term calculation 
 - rates that are arrays (different for each demographic, such as IFR)
 - add ValueError for protected sympy rate names
+- give a name to inteventions (related to plotting below)
 
 ## Calibration 
 - implementation of the simple rejection algorithm 
