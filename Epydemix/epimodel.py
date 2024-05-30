@@ -188,7 +188,7 @@ class EpiModel:
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
 
 
-    def simulate(self, population, start_date, end_date, steps, dt=None, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, **kwargs): 
+    def simulate(self, population, start_date, end_date, steps="daily", dt=None, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, **kwargs): 
         """
         Simulates the epidemic model over the given time period.
 
@@ -197,7 +197,7 @@ class EpiModel:
             - population (object): An object containing population data, particularly the contact matrices and demographic groups.
             - start_date (str or pd.Timestamp): The start date of the simulation.
             - end_date (str or pd.Timestamp): The end date of the simulation.
-            - steps (int): The number of time steps in the simulation.
+            - steps (int or str): The number of time steps in the simulation (default is daily, implying that the simulation step will be automatically 1 day)
             - dt (float): The length of the simulation step referred to 1 day (default is None).
             - Nsim (int, optional): The number of simulation runs to perform (default is 100).
             - quantiles (list of float, optional): A list of quantiles to compute for the simulation results (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
@@ -209,7 +209,12 @@ class EpiModel:
             - df_quantiles (pd.DataFrame): A DataFrame containing the quantile values for each compartment, demographic group, and date.
         """
         start_date, end_date = pd.to_datetime(start_date), pd.to_datetime(end_date)
-        simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
+
+        if steps == "daily":
+            simulation_dates = pd.date_range(start=start_date, end=end_date, freq="d").tolist()
+        else: 
+            simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
+
 
         # compute contact reductions
         self.compute_contact_reductions(population, simulation_dates)
