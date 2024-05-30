@@ -1,3 +1,5 @@
+from sympy import sympify
+
 class Transition:
     """
     Epidemic Transition Class
@@ -17,4 +19,6 @@ class Transition:
         self.source = source
         self.target = target
         self.rate_name = rate_name
+        self.rate_expression = sympify(str(rate_name))
+        self.rate_expression_eval = None
         self.agent = agent

@@ -223,7 +223,7 @@ class EpiModel:
         # add initial conditions to parameters
         for comp in kwargs: 
             parameters[comp] = kwargs[comp]
-
+        
         parameters["epimodel"] = self
 
         # simulation dt 
@@ -242,6 +242,28 @@ class EpiModel:
 
         df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles)
         return simulated_compartments, df_quantiles
+    
+
+    def evaluate_transition(self, parameters): 
+        """
+        Evaluates the transition rate expressions for each compartment with the given parameters.
+
+        Parameters:
+        -----------
+            parameters (dict): A dictionary containing the parameter values to substitute into the transition rate expressions.
+
+        Returns:
+        --------
+            None: This method updates the transition rate expressions in place.
+        """   
+        parameters_to_eval = {k: v for k, v in parameters.items() if k in self.parameters.keys()}
+        for comp in self.compartments:
+            trans = self.transitions[comp]
+            new_trans = []
+            for tr in trans:
+                tr.rate_expression_eval = float(tr.rate_expression.subs(parameters_to_eval))
+                new_trans.append(tr)
+            self.transitions[comp] = new_trans
 
 
 def stochastic_simulation(parameters, post_processing_function=lambda x, **kwargs: x): 
@@ -265,7 +287,10 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
     """
 
     epimodel = parameters["epimodel"]
-    
+
+    # evaluate transitions on parameters
+    epimodel.evaluate_transition(parameters)
+        
     # population in different compartments and demographic groups
     compartments_population = np.zeros((len(epimodel.compartments), len(parameters["population"].Nk)), dtype='int')
     for comp in epimodel.compartments:
@@ -291,7 +316,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
                 # get source, target, and rate for this transition
                 source = epimodel.compartments_idx[tr.source]
                 target = epimodel.compartments_idx[tr.target]
-                rate = parameters[tr.rate_name]
+                rate = tr.rate_expression_eval
 
                 # check if this transition has an interaction
                 if tr.agent is not None:
