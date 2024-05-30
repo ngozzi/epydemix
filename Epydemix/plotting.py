@@ -1,15 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-
-def get_colors_from_palette(palette_name, n_colors):
-    # Retrieve the colormap
-    cmap = plt.get_cmap(palette_name)
-    # Generate N evenly spaced values between 0 and 1
-    color_indices = np.linspace(0, 1, n_colors)
-    # Generate the colors
-    colors = [cmap(index) for index in color_indices]
-    np.random.shuffle(colors)
-    return colors
+import seaborn as sns
 
 
 def get_timeseries_data(df_quantiles, column, quantile): 
@@ -19,8 +10,7 @@ def get_timeseries_data(df_quantiles, column, quantile):
     Parameters:
     -----------
         - df_quantiles (pd.DataFrame): DataFrame containing quantile data for compartments and demographic groups.
-        - compartment (str): The name of the compartment to extract data for.
-        - demographic_group (str or int): The demographic group to extract data for.
+        - column (str): The name of the column to extract data for.
         - quantile (float): The quantile to extract data for.
 
     Returns:
@@ -58,7 +48,7 @@ def plot_quantiles(df_quantiles, columns, ax=None,
     if ax is None:
         fig, ax = plt.subplots(dpi=300, figsize=(10,4))
 
-    colors = get_colors_from_palette(palette, len(columns))
+    colors = sns.color_palette(palette, len(columns))
     t = 0
     for column in columns:
         if show_median:
