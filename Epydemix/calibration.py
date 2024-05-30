@@ -2,22 +2,35 @@ import numpy as np
 import pandas as pd 
 from .calibration_results import CalibrationResults
 from .utils import compute_quantiles, combine_simulation_outputs
+from .metrics import *
 
-def rmse(data, simulation): 
-    return np.sqrt(np.mean((data["data"] - simulation["data"])**2))
 
 def calibration_top_perc(simulation_function, 
-                priors, 
-                parameters, 
-                data,
-                top_perc=0.05,
-                error_metric=rmse,
-                Nsim=100, 
-                post_processing_function=None): 
-    
+                         priors, 
+                         parameters, 
+                         data,
+                         top_perc=0.05,
+                         error_metric=rmse,
+                         Nsim=100, 
+                         post_processing_function=None): 
+            
     """
-    Parameters
-        - priors (dict): dictionary of prior distributions
+    Calibrates the model by selecting the top percentage of simulations based on the chosen error metric.
+
+    Parameters:
+    -----------
+        simulation_function (callable): The function that runs the simulation, which takes the parameters dictionary as input.
+        priors (dict): A dictionary of prior distributions for the parameters.
+        parameters (dict): A dictionary of parameters used in the simulation.
+        data (dict): A dictionary containing the observed data with a key "data" pointing to an array of observations.
+        top_perc (float, optional): The top percentage of simulations to select based on the error metric (default is 0.05).
+        error_metric (callable, optional): The error metric function used to evaluate the simulations (default is rmse).
+        Nsim (int, optional): The number of simulation runs to perform (default is 100).
+        post_processing_function (callable, optional): A function for post-processing the simulation results (default is None).
+
+    Returns:
+    --------
+        CalibrationResults: An object containing the results of the calibration, including the posterior distribution, selected trajectories, and quantiles.
     """
     
     simulations, errors = [], []
