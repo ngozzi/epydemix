@@ -49,39 +49,3 @@ class Population:
             self.Nk_names = Nk_names
 
 
-    def update_contacts(self, date):
-        """
-        Rescales the contacts matrix for a specific date according to the reduction factor.
-        
-        Parameters:
-        -----------
-            - date (datetime): The date for which to rescale the contacts matrix.
-        
-        Returns:
-        --------
-            - np.ndarray: Rescaled contacts matrix for the given date.
-        
-        Raises:
-        -------
-            - ValueError: If the reduction factor for the date is not found.
-        """
-        try:
-            reduction_factor = self.reductions.loc[self.reductions.year_week == date.strftime('%G-%V')]["red"].values[0]
-        except IndexError:
-            raise ValueError(f"Reduction factor for date {date} not found.")
-        return reduction_factor * self.contact_matrices.get("all", np.zeros_like(self.Nk))
-
-
-    def compute_contacts(self, start_date, end_date):
-        """
-        Computes contact matrices over a given time window.
-        
-        Parameters:
-        -----------
-            - start_date (str): The initial date in 'YYYY-MM-DD' format.
-            - end_date (str): The final date in 'YYYY-MM-DD' format.
-        """
-        dates = pd.date_range(start=start_date, end=end_date)
-        self.Cs = OrderedDict({date: self.update_contacts(date) for date in dates})
-
-

@@ -240,3 +240,79 @@ def plot_selected_trajectories(calibration_results, ax=None, show_data=True, col
     TODO
     """
     return 0
+
+
+def plot_contact_matrix(population, layer_name, ax=None, title=None, show_colorbar=True, cmap="rocket_r", vmin=None, vmax=None, labelsize=10): 
+    """
+    Plots the contact matrix for a given population layer.
+
+    Parameters:
+    -----------
+        population (Population): An object containing population data, including contact matrices.
+        layer_name (str): The name of the contact matrix layer to plot.
+        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        title (str, optional): The title of the plot (default is None, which uses the layer name as the title).
+        show_colorbar (bool, optional): Whether to display the colorbar (default is True).
+        cmap (str, optional): The colormap to use for the plot (default is "rocket_r").
+        vmin (float, optional): The minimum value for the color scale (default is None, which uses the minimum value in the contact matrix).
+        vmax (float, optional): The maximum value for the color scale (default is None, which uses the maximum value in the contact matrix).
+
+    Returns:
+    --------
+        None: This function does not return any values; it produces a plot.
+    """
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6,6), dpi=300)
+
+    if vmin is None: 
+        vmin = np.min(population.contact_matrices[layer_name])
+    if vmax is None: 
+        vmax = np.max(population.contact_matrices[layer_name])
+
+    im = ax.imshow(population.contact_matrices[layer_name], origin="lower", cmap=sns.color_palette(cmap, as_cmap=True), vmin=vmin, vmax=vmax)
+    
+    ax.set_xticks(range(population.Nk_names.shape[0]))
+    ax.set_yticks(range(population.Nk_names.shape[0]))
+    ax.set_xticklabels(population.Nk_names, rotation=90, fontsize=labelsize)
+    ax.set_yticklabels(population.Nk_names, fontsize=labelsize)
+
+    if show_colorbar:
+        plt.colorbar(im, ax=ax, shrink=0.8)
+
+    if title is None: 
+        ax.set_title(layer_name)
+    else:
+        ax.set_title(title)
+
+
+def plot_population(population, ax=None, title="", color="dodgerblue", show_perc=False):
+    """
+    Plots the population distribution across demographic groups.
+
+    Parameters:
+    -----------
+        population (Population): An object containing population data, including demographic group names and sizes.
+        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        title (str, optional): The title of the plot (default is "").
+        color (str, optional): The color to use for the bars in the plot (default is "dodgerblue").
+        show_perc (bool, optional): Whether to show the population as a percentage of the total (default is False).
+
+    Returns:
+    --------
+        None: This function does not return any values; it produces a plot.
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10,6), dpi=300)
+    if show_perc: 
+        ax.bar(population.Nk_names, 100 * population.Nk / np.sum(population.Nk), color=color)
+        ax.set_ylabel("% of individuals")
+    else: 
+        ax.bar(population.Nk_names, population.Nk, color=color)
+        ax.set_ylabel("Number of individuals")
+
+    ax.tick_params(axis="x", rotation=90)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.grid(axis="y", linestyle="--", linewidth=0.3)
+    ax.set_title(title)
