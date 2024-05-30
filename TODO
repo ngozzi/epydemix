@@ -1,0 +1,23 @@
+## Simulation 
+- preprocessing function (for custom initial conditions)
+- nowprocessing function (for custom operation during the simulation, such as variant introduction)
+- custom interation term calculation 
+- rates that are arrays (different for each demographic, such as IFR)
+- add ValueError for protected sympy rate names
+
+## Calibration 
+- implementation of the simple rejection algorithm 
+- implementation of the ABC-SMC algorithm via pyabc integration
+- additional functionalities for the top_perc approach: 
+    - returns all the runs 
+    - select top_perc runs a posteriori
+
+## Plotting 
+- plot spectral radius or something related to the interventions
+
+## Others
+- decide structure of the data package: 
+    - how to integrate Prem et al and Mistry et al (also, there are two Prem et al)
+    - decide whether to give only one age group aggregation or let the user choose (but note that Mistry and Prem have different age groups)
+- complete data package based on these decisions
+
