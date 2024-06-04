@@ -330,3 +330,93 @@ def plot_population(population, ax=None, title="", color="dodgerblue", show_perc
     ax.spines["top"].set_visible(False)
     ax.grid(axis="y", linestyle="--", linewidth=0.3)
     ax.set_title(title)
+
+
+def plot_spectral_radius(epimodel, ax=None, title="", color="dodgerblue", normalize=False, show_perc=True, layer="overall", 
+                         show_interventions=True, interventions_palette="Set2", interventions_colors=None): 
+    """
+    Plots the spectral radius of the contact matrices over time.
+
+    Parameters:
+    - epimodel: The EpiModel object containing the contact matrices.
+    - ax: Optional. The matplotlib Axes object to plot on. If not provided, a new figure and axes will be created.
+    - title: Optional. The title of the plot.
+    - color: Optional. The color of the plot line.
+    - normalize: Optional. Whether to normalize the spectral radius by the initial value.
+    - show_perc: Optional. Whether to show the percentage change in the spectral radius.
+    - layer: Optional. The layer of the contact matrix to plot.
+    - show_interventions: Optional. Whether to show the interventions on the plot.
+    - interventions_palette: Optional. The seaborn color palette to use for the interventions.
+    - interventions_colors: Optional. The color of the interventions. If not provided, the palette will be used.
+
+    Returns:
+    - None
+
+    Raises:
+    - None
+
+    Notes:
+    - This function requires the EpiModel object to have the contact matrices defined.
+
+    """
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10,6), dpi=300)
+
+    # compute spectral radius
+    if len(epimodel.Cs) == 0:
+        print("Contacts over time have not been defined")
+        return None
+
+    dates = list(epimodel.Cs.keys())
+    rho = [compute_spectral_radius(epimodel.Cs[date][layer]) for date in dates]
+    if normalize:
+        rho = np.array(rho) / rho[0]
+        ylabel = f"$\\rho(C(t)) / \\rho(C(t_0))$ ({layer})"
+
+    elif show_perc:
+        rho = (np.array(rho) / rho[0] - 1) * 100
+        ylabel = f"$\\rho(C(t))$ % change ({layer})"
+        
+    else: 
+       ylabel = "$\\rho(C(t))$ ({layer})"
+
+    ax.plot(dates, rho, color=color)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.grid(axis="y", linestyle="--", linewidth=0.3)
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+
+    if show_interventions:
+        if interventions_colors is None:
+            interventions_colors = sns.color_palette(interventions_palette, len(epimodel.interventions))
+        else: 
+            if not isinstance(interventions_colors, list):
+                interventions_colors = [interventions_colors]
+
+        y1, y2 = ax.get_ylim()
+        x1, x2 = ax.get_xlim()
+        for color, interventions in zip(interventions_colors, epimodel.interventions): 
+            ax.fill_betweenx([y1, y2], interventions["start_date"], interventions["end_date"], color=color, alpha=0.3, linewidth=0, label=interventions["name"])
+
+        ax.set_xlim(x1, x2)
+        ax.set_ylim(y1, y2)
+
+        ax.legend(loc="upper right")
+  
+    
+def compute_spectral_radius(m): 
+    """
+    Computes the spectral radius of a matrix.
+
+    Parameters:
+    -----------
+        m (np.array): The matrix to compute the spectral radius for.
+
+    Returns:
+    --------
+        float: The spectral radius of the matrix.
+    """
+    return np.max(np.abs(np.linalg.eigvals(m)))
+    

@@ -24,6 +24,7 @@ class EpiModel:
         self.parameters = {}
         self.add_compartments(compartments)
         self.add_parameters(parameters)
+        self.Cs = {}
 
 
     def add_compartments(self, compartments): 
@@ -95,7 +96,7 @@ class EpiModel:
         self.transitions[source].append(transition)
 
 
-    def add_intervention(self, layer_name, start_date, end_date, reduction_factor=None, new_matrix=None): 
+    def add_intervention(self, layer_name, start_date, end_date, reduction_factor=None, new_matrix=None, name=""): 
         """
         Adds an intervention to the epidemic model.
 
@@ -106,6 +107,7 @@ class EpiModel:
             - end_date (str or datetime): The end date of the intervention.
             - reduction_factor (float, optional): The factor by which to reduce the contact matrix. Default is None.
             - new_matrix (np.ndarray, optional): A new contact matrix to use during the intervention. Default is None.
+            - name (str, optional): The name of the intervention. Default is an empty string.
 
         Raises:
         -------
@@ -125,7 +127,8 @@ class EpiModel:
             "start_date": start_date, 
             "end_date": end_date, 
             "reduction_factor": reduction_factor, 
-            "new_matrix": new_matrix
+            "new_matrix": new_matrix,
+            "name": name
         })
 
 
@@ -275,6 +278,36 @@ class EpiModel:
                 tr.rate_expression_eval = float(tr.rate_expression.subs(parameters_to_eval))
                 new_trans.append(tr)
             self.transitions[comp] = new_trans
+
+    
+    def clear_interventions(self):
+        """
+        Clears the interventions list.
+        """
+        self.interventions = [] 
+
+
+    def clear_transitions(self): 
+        """
+        Clears the transitions list.
+        """
+        self.transitions_list = []
+        self.transitions = {comp: [] for comp in self.compartments}
+
+
+    def clear_compartments(self): 
+        """
+        Clears the compartments list.
+        """
+        self.compartments = []
+        self.compartments_idx = {}
+
+
+    def clear_parameters(self):
+        """
+        Clears the parameters dictionary.
+        """
+        self.parameters = {}
 
 
 def stochastic_simulation(parameters, post_processing_function=lambda x, **kwargs: x): 
