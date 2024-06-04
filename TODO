@@ -1,15 +1,16 @@
 ## Simulation 
 - preprocessing function (for custom initial conditions)
 - nowprocessing function (for custom operation during the simulation, such as variant introduction)
-- custom interation term calculation 
+- custom interaction term calculation 
 - rates that are arrays (different for each demographic, such as IFR)
 - add ValueError for protected sympy rate names
-- give a name to inteventions (related to plotting below)
+- give a name to interventions (related to plotting below)
 - parallelization
 
 ## Calibration 
 - implementation of the simple rejection algorithm 
-- implementation of the ABC-SMC algorithm via pyabc integration
+- ABC-SMC, model(p) must returns all simulated stuff
+- compute_quantiles() may raise error with strange custom output, allow for the possibility to set it to False
 - additional functionalities for the top_perc approach: 
     - returns all the runs 
     - select top_perc runs a posteriori

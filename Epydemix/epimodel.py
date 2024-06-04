@@ -220,7 +220,7 @@ class EpiModel:
         self.compute_contact_reductions(population, simulation_dates)
 
         # simulation parameters 
-        parameters = {"population": population, "Cs": self.Cs}
+        parameters = {"population": population}
         parameters.update(self.parameters)
 
         # add initial conditions to parameters
@@ -309,10 +309,10 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
     compartments_evolution = [compartments_population]     
 
     # simulate
-    for date in parameters["Cs"].keys():
+    for date in epimodel.Cs.keys():
 
         # get today contacts matrix and seasonality adjustment
-        C = parameters["Cs"][date]["overall"]
+        C = epimodel.Cs[date]["overall"]
 
         # last time step population in different compartments (n_comp, n_age)
         pop = compartments_evolution[-1]
