@@ -23,7 +23,7 @@ def get_timeseries_data(df_quantiles, column, quantile):
 def plot_quantiles(results, columns, ax=None,
                    lower_q=0.05, upper_q=0.95, show_median=True, 
                    ci_alpha=0.3, title="", show_legend=True, 
-                   palette="Set2"):
+                   palette="Set2", colors=None, labels=None):
     """
     Plots the quantiles for a specific compartment and demographic group over time.
 
@@ -41,6 +41,7 @@ def plot_quantiles(results, columns, ax=None,
         - title (str, optional): The title of the plot (default is "").
         - show_legend (bool, optional): Whether to show legend (default is True).
         - palette (str, optional): The color palette for the plot (default is "Set2")
+        - colors (list or str, optional): The colors to use for the plot (default is None).
     """
     
     df_quantiles = results.get_df_quantiles()
@@ -51,12 +52,23 @@ def plot_quantiles(results, columns, ax=None,
     if ax is None:
         fig, ax = plt.subplots(dpi=300, figsize=(10,4))
 
-    colors = sns.color_palette(palette, len(columns))
+    if colors is None:
+        colors = sns.color_palette(palette, len(columns))
+    else: 
+        if not isinstance(colors, list):
+            colors = [colors]
+
+    if labels is not None:
+        if not isinstance(labels, list):
+            labels = [labels]
+    else: 
+        labels = columns
+
     t = 0
     for column in columns:
         if show_median:
             df_med = get_timeseries_data(df_quantiles, column, 0.5)
-            ax.plot(df_med.date, df_med[column].values, color=colors[t], label=column)
+            ax.plot(df_med.date, df_med[column].values, color=colors[t], label=labels[t])
 
         df_q1 = get_timeseries_data(df_quantiles, column, lower_q)
         df_q2 = get_timeseries_data(df_quantiles, column, upper_q)
