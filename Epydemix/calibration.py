@@ -6,6 +6,8 @@ from .metrics import *
 import pyabc
 from datetime import timedelta
 import uuid
+import os 
+import tempfile
 
 
 def calibration_top_perc(simulation_function, 
@@ -38,18 +40,19 @@ def calibration_top_perc(simulation_function,
     
     simulations, errors = [], []
     sampled_params = {p: [] for p in priors.keys()}
+    simulation_params = parameters.copy()
     for n in range(Nsim):
 
         # sample
         for param, distr in priors.items():
             rv = distr.rvs()
             sampled_params[param].append(rv)
-            parameters[param] = rv
+            simulation_params[param] = rv
 
         if post_processing_function is None:
-            results = simulation_function(parameters)
+            results = simulation_function(simulation_params)
         else: 
-            results = simulation_function(parameters, post_processing_function=post_processing_function)
+            results = simulation_function(simulation_params, post_processing_function=post_processing_function)
             
         simulations.append(results)
         errors.append(error_metric(data=data, simulation=results))
@@ -67,7 +70,7 @@ def calibration_top_perc(simulation_function,
         selected_simulations_formatted = combine_simulation_outputs(selected_simulations_formatted, res)
 
     # compute quantiles 
-    selected_simulations_quantiles = compute_quantiles(selected_simulations_formatted, simulation_dates=parameters["simulation_dates"])
+    selected_simulations_quantiles = compute_quantiles(selected_simulations_formatted, simulation_dates=simulation_params["simulation_dates"])
 
     # select parameters
     selected_params = {p: np.array(arr)[idxs] for p, arr in sampled_params.items()}
@@ -104,7 +107,7 @@ def calibration_abc_smc(simulation_function,
     
 
     def model(p): 
-        return {'data': simulation_function(**p, **parameters, post_processing_function=post_processing_function)['data']}
+        return {'data': simulation_function({**p, **parameters}, post_processing_function=post_processing_function)['data']}
 
     if filename == '':
         filename = str(uuid.uuid4())
@@ -114,6 +117,9 @@ def calibration_abc_smc(simulation_function,
                        distance_function=error_metric, 
                        transitions=transitions, 
                        population_size=population_size)
+    
+    db_path = os.path.join(tempfile.gettempdir(), "test.db")
+    abc.new("sqlite:///" + db_path, data)
     #if db == None:
     #    db_path = os.path.join(f'./calibration_runs/{basin_name}/dbs/', f"{filename}.db")
     #    abc.new("sqlite:///" + db_path, {"data": observations})
@@ -121,14 +127,23 @@ def calibration_abc_smc(simulation_function,
     #else:
     #    abc.load(db, run_id)
         
-    #history = abc.run(minimum_epsilon=minimum_epsilon, 
-    #                  max_nr_populations=max_nr_populations,
-    #                  max_walltime=max_walltime)
+    history = abc.run(minimum_epsilon=minimum_epsilon, 
+                      max_nr_populations=max_nr_populations,
+                      max_walltime=max_walltime)
     
-    #with open(os.path.join(f'./calibration_runs/{basin_name}/abc_history/', f"{filename}.pkl"), 'wb') as file:
-    #    pkl.dump(history, file)
-
-    #history.get_distribution()[0].to_csv(f"./posteriors/posterior_{basin_name}.csv")
-    #np.savez_compressed(f"./posteriors/posterior_samples_{basin_name}.npz", np.array([d["data"] for d in history.get_weighted_sum_stats()[1]]))
+    # format output
+    results = CalibrationResults()
+    results.set_calibration_strategy("abc_smc")
+    results.set_posterior_distribution(history.get_distribution()[0])
+    results.set_selected_trajectories(np.array([d["data"] for d in history.get_weighted_sum_stats()[1]]))
+    results.set_data(data)
+    results.set_priors(priors)
+    results.set_calibration_params({"population_size": population_size,
+                                    "minimum_epsilon": minimum_epsilon,
+                                    "error_metric": error_metric, 
+                                    "max_nr_populations": max_nr_populations,
+                                    "max_walltime": max_walltime})
+    selected_simulations_quantiles = compute_quantiles({"data": [d["data"] for d in history.get_weighted_sum_stats()[1]]}, simulation_dates=parameters["simulation_dates"])
+    results.set_selected_quantiles(selected_simulations_quantiles)
     
-    #return history
+    return results
