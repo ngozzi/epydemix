@@ -3,6 +3,9 @@ import pandas as pd
 from .calibration_results import CalibrationResults
 from .utils import compute_quantiles, combine_simulation_outputs
 from .metrics import *
+import pyabc
+from datetime import timedelta
+import uuid
 
 
 def calibration_top_perc(simulation_function, 
@@ -82,3 +85,50 @@ def calibration_top_perc(simulation_function,
     results.set_selected_quantiles(selected_simulations_quantiles)
 
     return results
+
+
+def calibration_abc_smc(simulation_function, 
+                         priors, 
+                         parameters, 
+                         data,
+                         error_metric=rmse,
+                         post_processing_function=None,
+                         transitions : pyabc.AggregatedTransition = None,
+                         max_walltime : timedelta = None,
+                         population_size : int = 1000,
+                         minimum_epsilon : float = 0.15, 
+                         max_nr_populations : int = 10, 
+                         filename : str = '', 
+                         run_id = None, 
+                         db = None): 
+    
+
+    def model(p): 
+        return {'data': simulation_function(**p, **parameters, post_processing_function=post_processing_function)['data']}
+
+    if filename == '':
+        filename = str(uuid.uuid4())
+
+    abc = pyabc.ABCSMC(models=model, 
+                       parameter_priors=pyabc.Distribution(priors), 
+                       distance_function=error_metric, 
+                       transitions=transitions, 
+                       population_size=population_size)
+    #if db == None:
+    #    db_path = os.path.join(f'./calibration_runs/{basin_name}/dbs/', f"{filename}.db")
+    #    abc.new("sqlite:///" + db_path, {"data": observations})
+
+    #else:
+    #    abc.load(db, run_id)
+        
+    #history = abc.run(minimum_epsilon=minimum_epsilon, 
+    #                  max_nr_populations=max_nr_populations,
+    #                  max_walltime=max_walltime)
+    
+    #with open(os.path.join(f'./calibration_runs/{basin_name}/abc_history/', f"{filename}.pkl"), 'wb') as file:
+    #    pkl.dump(history, file)
+
+    #history.get_distribution()[0].to_csv(f"./posteriors/posterior_{basin_name}.csv")
+    #np.savez_compressed(f"./posteriors/posterior_samples_{basin_name}.npz", np.array([d["data"] for d in history.get_weighted_sum_stats()[1]]))
+    
+    #return history
