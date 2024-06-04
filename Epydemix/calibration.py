@@ -105,6 +105,31 @@ def calibration_abc_smc(simulation_function,
                          run_id = None, 
                          db = None): 
     
+    """
+    Performs Approximate Bayesian Computation with Sequential Monte Carlo (ABC-SMC) calibration.
+
+    Parameters:
+    -----------
+        simulation_function (callable): The function that runs the simulation, which takes the parameters dictionary as input.
+        priors (dict): A dictionary of prior distributions for the parameters.
+        parameters (dict): A dictionary of fixed parameters used in the simulation.
+        data (dict): A dictionary containing the observed data with a key "data" pointing to an array of observations.
+        error_metric (callable, optional): The error metric function used to evaluate the simulations (default is rmse).
+        post_processing_function (callable, optional): A function for post-processing the simulation results (default is None).
+        transitions (pyabc.AggregatedTransition, optional): Transition kernel for the ABC-SMC algorithm (default is None).
+        max_walltime (timedelta, optional): The maximum walltime for the ABC-SMC run (default is None).
+        population_size (int, optional): The size of the population for each ABC-SMC generation (default is 1000).
+        minimum_epsilon (float, optional): The minimum value of epsilon for the ABC-SMC algorithm (default is 0.15).
+        max_nr_populations (int, optional): The maximum number of populations for the ABC-SMC algorithm (default is 10).
+        filename (str, optional): The filename for storing the results (default is '').
+        run_id (optional): The run ID for continuing a previous ABC-SMC run (default is None).
+        db (optional): The database for storing the ABC-SMC results (default is None).
+
+    Returns:
+    --------
+        CalibrationResults: An object containing the results of the calibration, including the posterior distribution, selected trajectories, and quantiles.
+    """
+    
 
     def model(p): 
         return {'data': simulation_function({**p, **parameters}, post_processing_function=post_processing_function)['data']}

@@ -8,8 +8,11 @@
 - parallelization
 
 ## Calibration 
+- single calibration function with switch?
 - implementation of the simple rejection algorithm 
+- model selection, needs to restructure CalibrationResults
 - ABC-SMC, model(p) must returns all simulated stuff
+- ABC-SMC, allow possiblity to resume runs (?)
 - compute_quantiles() may raise error with strange custom output, allow for the possibility to set it to False
 - additional functionalities for the top_perc approach: 
     - returns all the runs 
@@ -18,6 +21,7 @@
 
 ## Plotting 
 - plot spectral radius or something related to the interventions
+- divide plotting function in submodules, some are only for calibration, other to Population and simulation
 
 ## Others
 - decide structure of the data package: 
