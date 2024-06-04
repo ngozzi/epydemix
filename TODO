@@ -4,7 +4,6 @@
 - custom interaction term calculation 
 - rates that are arrays (different for each demographic, such as IFR)
 - add ValueError for protected sympy rate names
-- give a name to interventions (related to plotting below)
 - parallelization
 
 ## Calibration 
@@ -21,7 +20,6 @@
 - run projections sampling from the posterior
 
 ## Plotting 
-- plot spectral radius or something related to the interventions
 - divide plotting function in submodules, some are only for calibration, other to Population and simulation
 
 ## Others
@@ -29,4 +27,5 @@
     - how to integrate Prem et al and Mistry et al (also, there are two Prem et al)
     - decide whether to give only one age group aggregation or let the user choose (but note that Mistry and Prem have different age groups)
 - complete data package based on these decisions
+- submodules divisions
 
