@@ -1,18 +1,21 @@
 # libraries
 from .transition import Transition
-from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs
+from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string
 from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
 from datetime import timedelta
+from evalidate import Expr, EvalException
+import uuid
+
 
 class EpiModel:
     """
     EpiModel Class
     """
 
-    def __init__(self, compartments=[], parameters={}):
+    def __init__(self, compartments=[]):
         """
         EpiModel constructor
         """
@@ -22,8 +25,9 @@ class EpiModel:
         self.compartments = []
         self.compartments_idx = {}
         self.parameters = {}
+        self.definitions = {}
+        self.overrides = {}
         self.add_compartments(compartments)
-        self.add_parameters(parameters)
         self.Cs = {}
 
 
@@ -55,17 +59,102 @@ class EpiModel:
             self.compartments_idx[compartments] = max_idx + 1
 
 
-    def add_parameters(self, parameters):
+    def clear_compartments(self): 
         """
-        Add new parameters to the epidemic model.
+        Clears the compartments list.
+        """
+        self.compartments = []
+        self.compartments_idx = {}
+
+
+    def add_parameter(self, name=None, value=None, parameters_dict=None):
+        """
+        Add new parameters to the model.
+
+        Parameters:
+        -----------
+        name : str, optional
+            The name of the parameter.
+        value : any, optional
+            The value of the parameter.
+        parameters_dict : dict, optional
+            A dictionary of parameter names and values.
+
+        If `parameters_dict` is provided, `name` and `value` are ignored and
+        the parameters are updated using the dictionary.
+        """
+        if parameters_dict:
+            self.parameters.update(parameters_dict)
+        elif name is not None and value is not None:
+            self.parameters.update({name: value})
+        else:
+            raise ValueError("Either name and value or parameters_dict must be provided.")
+
+
+    def get_parameter(self, name): 
+        """
+        Return the value of a parameter
 
         Parameters: 
-            - parameters (dict): A dictionary of parameters
+            - name (str): The nema of the parameter
         """
-        self.parameters.update(parameters)
+        return self.parameters[name]
 
 
-    def add_transition(self, source, target, rate_name, agent=None):
+    def delete_parameter(self, name): 
+        """
+        Delete a parameter from the dictionary of model's parameters
+
+        Parameters: 
+            - name (str): The name of the parameter
+        """
+        return self.parameters.pop(name)
+    
+
+    def clear_parameters(self):
+        """
+        Clears the parameters dictionary.
+        """
+        self.parameters = {}
+
+
+    def override_parameter(self, start_date, end_date, name, value):
+        """
+        Adds an override for a parameter with the specified name.
+
+        Parameters:
+        -----------
+            - start_date (str): The start date for the override period.
+            - end_date (str): The end date for the override period
+            - name (str): The name of the parameter to override.
+            - value (any): The value to override the parameter with.
+        """
+        override_dict = {"start_date": start_date, "end_date": end_date, "value": value}
+            
+        if name in self.overrides:
+            self.overrides[name].append(override_dict)
+        else:
+            self.overrides[name] = [override_dict]
+
+
+    def delete_override(self, name): 
+        """
+        Delete overrides for a parameter 
+
+        Parameters: 
+            - name (str): The name of the parameter
+        """
+        self.overrides.pop(name)
+
+
+    def clear_overrides(self): 
+        """
+        Clears the overrides dictionary.
+        """
+        self.overrides = {}
+
+
+    def add_transition(self, source, target, rate, agent=None):
         """
         Adds a transition to the epidemic model.
 
@@ -73,8 +162,7 @@ class EpiModel:
         -----------
             - source (str): The source compartment of the transition.
             - target (str): The target compartment of the transition.
-            - rate_name (str): The name of the rate for the transition.
-            - rate (float, optional): The rate at which the transition occurs (default is None).
+            - rate (str, float): The expression or the value of the rate for the transition.
             - agent (str, optional): The interacting agent for the transition (default is None).
 
         Raises:
@@ -87,13 +175,28 @@ class EpiModel:
         if missing_compartments:
             raise ValueError(f"These compartments are not in the compartments list: {', '.join(missing_compartments)}")
 
-        transition = Transition(source=source, target=target, rate_name=rate_name, agent=agent)
+        if isinstance(rate, str):
+            transition = Transition(source=source, target=target, rate=rate, agent=agent)
+        else: 
+            # create unique name for rate 
+            rate_name = generate_unique_string()
+            transition = Transition(source=source, target=target, rate=rate_name, agent=agent)
+            # add rate to parameters
+            self.add_parameter(name=rate_name, value=rate)
 
         # Append to transitions list
         self.transitions_list.append(transition)
 
         # Add transition to the dictionary
         self.transitions[source].append(transition)
+
+    
+    def clear_transitions(self): 
+        """
+        Clears the transitions list.
+        """
+        self.transitions_list = []
+        self.transitions = {comp: [] for comp in self.compartments}
 
 
     def add_intervention(self, layer_name, start_date, end_date, reduction_factor=None, new_matrix=None, name=""): 
@@ -130,6 +233,13 @@ class EpiModel:
             "new_matrix": new_matrix,
             "name": name
         })
+
+            
+    def clear_interventions(self):
+        """
+        Clears the interventions list.
+        """
+        self.interventions = [] 
 
 
     def apply_intervention(self, intervention, simulation_dates):
@@ -189,7 +299,7 @@ class EpiModel:
         # compute overall contacts
         for date in self.Cs.keys(): 
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
-
+ 
 
     def simulate(self, population, start_date, end_date, steps="daily", dt=None, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, **kwargs): 
         """
@@ -218,13 +328,18 @@ class EpiModel:
         else: 
             simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
 
+        # compute parameter definitions
+        self.definitions = create_definitions(self.parameters, len(simulation_dates))
+
+        # apply overrides
+        self.definitions = apply_overrides(self.definitions, self.overrides, simulation_dates)
 
         # compute contact reductions
         self.compute_contact_reductions(population, simulation_dates)
 
         # simulation parameters 
         parameters = {"population": population}
-        parameters.update(self.parameters)
+        parameters.update(self.definitions)
 
         # add initial conditions to parameters
         for comp in kwargs: 
@@ -258,58 +373,6 @@ class EpiModel:
         return simulation_results
     
 
-    def evaluate_transition(self, parameters): 
-        """
-        Evaluates the transition rate expressions for each compartment with the given parameters.
-
-        Parameters:
-        -----------
-            parameters (dict): A dictionary containing the parameter values to substitute into the transition rate expressions.
-
-        Returns:
-        --------
-            None: This method updates the transition rate expressions in place.
-        """   
-        parameters_to_eval = {k: v for k, v in parameters.items() if k in self.parameters.keys()}
-        for comp in self.compartments:
-            trans = self.transitions[comp]
-            new_trans = []
-            for tr in trans:
-                tr.rate_expression_eval = float(tr.rate_expression.subs(parameters_to_eval))
-                new_trans.append(tr)
-            self.transitions[comp] = new_trans
-
-    
-    def clear_interventions(self):
-        """
-        Clears the interventions list.
-        """
-        self.interventions = [] 
-
-
-    def clear_transitions(self): 
-        """
-        Clears the transitions list.
-        """
-        self.transitions_list = []
-        self.transitions = {comp: [] for comp in self.compartments}
-
-
-    def clear_compartments(self): 
-        """
-        Clears the compartments list.
-        """
-        self.compartments = []
-        self.compartments_idx = {}
-
-
-    def clear_parameters(self):
-        """
-        Clears the parameters dictionary.
-        """
-        self.parameters = {}
-
-
 def stochastic_simulation(parameters, post_processing_function=lambda x, **kwargs: x): 
     """
     Run a stochastic simulation of the epidemic model over the specified time period.
@@ -333,7 +396,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
     epimodel = parameters["epimodel"]
 
     # evaluate transitions on parameters
-    epimodel.evaluate_transition(parameters)
+    #epimodel.evaluate_transition(parameters)
         
     # population in different compartments and demographic groups
     compartments_population = np.zeros((len(epimodel.compartments), len(parameters["population"].Nk)), dtype='int')
@@ -342,7 +405,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
     compartments_evolution = [compartments_population]     
 
     # simulate
-    for date in epimodel.Cs.keys():
+    for i, date in enumerate(epimodel.Cs.keys()):
 
         # get today contacts matrix and seasonality adjustment
         C = epimodel.Cs[date]["overall"]
@@ -360,7 +423,8 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
                 # get source, target, and rate for this transition
                 source = epimodel.compartments_idx[tr.source]
                 target = epimodel.compartments_idx[tr.target]
-                rate = tr.rate_expression_eval
+                rate = Expr(tr.rate).eval(parameters)[i]
+                #rate = tr.rate_expression_eval
 
                 # check if this transition has an interaction
                 if tr.agent is not None:

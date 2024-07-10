@@ -1,5 +1,42 @@
 import numpy as np 
 import pandas as pd
+from collections.abc import Iterable
+import datetime
+import random
+import string
+
+
+def create_definitions(parameters, T):
+    """
+    Generates a dictionary where each value is an array of length T based on the input dictionary.
+
+    Parameters:
+    -----------
+        - parameters (dict): A dictionary where values can be either scalars (e.g., int, float) or iterables (e.g., list, tuple, range).
+        - T (int): The length of the arrays to be created in the output dictionary.
+
+    Returns:
+    --------
+    A dictionary where keys are the same as in `parameters` and values are arrays of length `T`.
+        - If the value in `parameters` is a scalar, the corresponding value in the output dictionary is an array with `T` repeated elements of that scalar.
+        - If the value in `parameters` is an iterable, the corresponding value in the output dictionary is an array of length `T` created by repeating the iterable as many times as needed and truncating the excess.
+
+    Raises:
+    -------
+    ValueError
+        If a value in `parameters` is neither a scalar nor an iterable.
+    """
+    definitions = {}
+    for key, value in parameters.items():
+        if isinstance(value, (int, float)):  # Check if the value is a scalar
+            definitions[key] = [value] * T
+        elif isinstance(value, (Iterable)):  # Check if the value is a list or tuple
+            extended_value = (list(value) * ((T // len(value)) + 1))[:T]  # Repeat and truncate to length T
+            definitions[key] = extended_value
+        else:
+            raise ValueError(f"Unsupported type for key {key}: {type(value)}")
+    return definitions
+
 
 def compute_quantiles(data, simulation_dates, axis=0, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]):
     """
@@ -88,3 +125,59 @@ def combine_simulation_outputs(combined_simulation_outputs, simulation_outputs):
             else:
                 combined_simulation_outputs[key] = [simulation_outputs[key]]
     return combined_simulation_outputs
+
+
+def str_to_date(date_str):
+    return datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+
+
+def apply_overrides(definitions, overrides, dates):
+    """
+    Applies overrides to the definitions based on the specified dates.
+
+    Parameters:
+    -----------
+        - definitions (dict): A dictionary where keys are parameter names and values are arrays 
+                              representing the values of the parameters over time.
+        - overrides (dict): A dictionary of parameter overrides
+        - dates (list): A list of dates corresponding to the values in the definitions arrays.
+
+    Returns:
+    --------
+        - A dictionary with the same keys as definitions, but with values updated according to the overrides.
+    """
+    
+    for name, overrides in overrides.items():
+        if name in definitions:
+            values = definitions[name]
+            for override in overrides:
+                start_date = str_to_date(override["start_date"])
+                end_date = str_to_date(override["end_date"])
+                override_value = override["value"]
+
+                for i, date in enumerate(dates):
+                    if start_date <= date.date() <= end_date:
+                        values[i] = override_value
+    return definitions
+
+
+def generate_unique_string(length=12):
+    """
+    Generates a random unique string containing only letters.
+
+    Parameters:
+    -----------
+    length : int, optional
+        The length of the generated string (default is 12).
+
+    Returns:
+    --------
+    str
+        A random unique string containing only letters.
+    """
+    letters = string.ascii_letters  # Contains both lowercase and uppercase letters
+    return ''.join(random.choice(letters) for _ in range(length))
+
+
+def compute_days(start_date, end_date):
+    return pd.date_range(start_date, end_date).shape[0]
