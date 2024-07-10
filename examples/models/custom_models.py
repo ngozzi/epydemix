@@ -19,7 +19,7 @@ def my_stochastic_SIR(parameters):
     dict: A dictionary with key "data" containing the simulated incidence.
     """
     
-    beta = parameters['bet']
+    beta = parameters['beta']
     mu = parameters['mu']
     S = parameters['S']
     I = parameters['I']

@@ -327,18 +327,11 @@ class EpiModel:
         else: 
             simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
 
-        # compute parameter definitions
-        self.definitions = create_definitions(self.parameters, len(simulation_dates))
-
-        # apply overrides
-        self.definitions = apply_overrides(self.definitions, self.overrides, simulation_dates)
-
         # compute contact reductions
         self.compute_contact_reductions(population, simulation_dates)
 
         # simulation parameters 
-        parameters = {"population": population}
-        parameters.update(self.definitions)
+        parameters = {"population": population, "simulation_dates": simulation_dates}
 
         # add initial conditions to parameters
         for comp in kwargs: 
@@ -394,9 +387,16 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
 
     epimodel = parameters["epimodel"]
 
-    # evaluate transitions on parameters
-    #epimodel.evaluate_transition(parameters)
-        
+    # check if some parameter need to be overwritten (prior)
+    for k in parameters.keys(): 
+        if k in epimodel.parameters: 
+            epimodel.parameters[k] = parameters[k]
+ 
+    # compute parameter definitions and apply overrides
+    epimodel.definitions = create_definitions(epimodel.parameters, len(parameters["simulation_dates"]))
+    epimodel.definitions = apply_overrides(epimodel.definitions, epimodel.overrides, parameters["simulation_dates"])
+    parameters.update(epimodel.definitions)
+
     # population in different compartments and demographic groups
     compartments_population = np.zeros((len(epimodel.compartments), len(parameters["population"].Nk)), dtype='int')
     for comp in epimodel.compartments:
