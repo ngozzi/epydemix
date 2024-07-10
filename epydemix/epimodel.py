@@ -1,6 +1,6 @@
 # libraries
 from .transition import Transition
-from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, load_population
+from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, load_population, compute_simulation_dates
 from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
@@ -326,31 +326,22 @@ class EpiModel:
             - simulated_compartments (list of np.ndarray): The results of the simulated compartments for each run.
             - df_quantiles (pd.DataFrame): A DataFrame containing the quantile values for each compartment, demographic group, and date.
         """
-        start_date, end_date = pd.to_datetime(start_date), pd.to_datetime(end_date)
 
-        if steps == "daily":
-            simulation_dates = pd.date_range(start=start_date, end=end_date, freq="d").tolist()
-        else: 
-            simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
+        # compute simulation dates
+        simulation_dates = compute_simulation_dates(start_date, end_date)
 
         # compute contact reductions
         self.compute_contact_reductions(simulation_dates)
 
         # simulation parameters 
-        parameters = {"simulation_dates": simulation_dates}
+        parameters = {"simulation_dates": simulation_dates, 
+                      "epimodel": self, 
+                      "dt": np.diff(simulation_dates)[0] / timedelta(days=1) if dt is None else dt}
 
         # add initial conditions to parameters
         for comp in kwargs: 
             parameters[comp] = kwargs[comp]
         
-        parameters["epimodel"] = self
-
-        # simulation dt 
-        if dt is None:
-            parameters["dt"] = np.diff(simulation_dates)[0] / timedelta(days=1)
-        else: 
-            parameters["dt"] = dt
-
         # simulate
         simulated_compartments = {}
         for i in range(Nsim): 

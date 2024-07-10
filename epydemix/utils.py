@@ -223,3 +223,12 @@ def load_population(population_name, path_to_data, layers=["school", "work", "ho
     Nk = pd.read_csv(os.path.join(path_to_data, "demographic/Nk.csv"))
     population.add_population(Nk=Nk["value"].values, Nk_names=Nk["group"].values)
     return population
+
+
+def compute_simulation_dates(start_date, end_date, steps="daily"): 
+    if steps == "daily":
+        simulation_dates = pd.date_range(start=start_date, end=end_date, freq="d").tolist()
+    else: 
+        simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
+
+    return simulation_dates
