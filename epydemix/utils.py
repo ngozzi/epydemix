@@ -5,6 +5,8 @@ import datetime
 import random
 import string
 from evalidate import Expr, base_eval_model
+import os 
+from epydemix.population import Population
 
 
 def create_definitions(parameters, T):
@@ -91,7 +93,7 @@ def format_simulation_output(simulation_output, parameters):
     """
     formatted_output = {}
     for comp, pos in parameters["epimodel"].compartments_idx.items(): 
-        for i, dem in enumerate(parameters["population"].Nk_names): 
+        for i, dem in enumerate(parameters["epimodel"].population.Nk_names): 
             formatted_output[f"{comp}_{dem}"] = simulation_output[:, pos, i]
         formatted_output[f"{comp}_total"] = np.sum(simulation_output[:, pos, :], axis=1)
 
@@ -211,3 +213,13 @@ def evaluate(expr, env):
     eval_model = base_eval_model
     eval_model.nodes.extend(['Mult', 'Pow'])
     return Expr(expr, model=eval_model).eval(env)
+
+
+def load_population(population_name, path_to_data, layers=["school", "work", "home", "community"]): 
+    population = Population(name=population_name)
+    for layer_name in layers:
+        population.add_contact_matrix(np.load(os.path.join(path_to_data, f"contacts-matrix/contacts_matrix_{layer_name}.npz"))["arr_0"], layer_name=layer_name)
+
+    Nk = pd.read_csv(os.path.join(path_to_data, "demographic/Nk.csv"))
+    population.add_population(Nk=Nk["value"].values, Nk_names=Nk["group"].values)
+    return population
