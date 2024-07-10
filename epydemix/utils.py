@@ -4,6 +4,7 @@ from collections.abc import Iterable
 import datetime
 import random
 import string
+from evalidate import Expr, base_eval_model
 
 
 def create_definitions(parameters, T):
@@ -29,9 +30,9 @@ def create_definitions(parameters, T):
     definitions = {}
     for key, value in parameters.items():
         if isinstance(value, (int, float)):  # Check if the value is a scalar
-            definitions[key] = [value] * T
+            definitions[key] = np.array([value] * T)
         elif isinstance(value, (Iterable)):  # Check if the value is a list or tuple
-            extended_value = (list(value) * ((T // len(value)) + 1))[:T]  # Repeat and truncate to length T
+            extended_value = np.array((list(value) * ((T // len(value)) + 1))[:T])  # Repeat and truncate to length T
             definitions[key] = extended_value
         else:
             raise ValueError(f"Unsupported type for key {key}: {type(value)}")
@@ -181,3 +182,32 @@ def generate_unique_string(length=12):
 
 def compute_days(start_date, end_date):
     return pd.date_range(start_date, end_date).shape[0]
+
+
+def evaluate(expr, env):
+    """
+    Evaluates the expression with the given environment, allowing only whitelisted operations.
+
+    This function extends the base evaluation model to whitelist the 'Mult' and 'Pow' operations,
+    ensuring only these operations are permitted during the evaluation.
+
+    Parameters:
+    -----------
+    expr : str
+        The expression to evaluate.
+    env : dict
+        The environment containing variable values.
+
+    Returns:
+    --------
+    any
+        The result of evaluating the expression.
+
+    Raises:
+    -------
+    EvalException
+        If there is an error in evaluating the expression.
+    """
+    eval_model = base_eval_model
+    eval_model.nodes.extend(['Mult', 'Pow'])
+    return Expr(expr, model=eval_model).eval(env)

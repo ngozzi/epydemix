@@ -1,12 +1,11 @@
 # libraries
 from .transition import Transition
-from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string
+from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate
 from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
 from datetime import timedelta
-from evalidate import Expr, EvalException
 import uuid
 
 
@@ -423,8 +422,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
                 # get source, target, and rate for this transition
                 source = epimodel.compartments_idx[tr.source]
                 target = epimodel.compartments_idx[tr.target]
-                rate = Expr(tr.rate).eval(parameters)[i]
-                #rate = tr.rate_expression_eval
+                rate = evaluate(expr=tr.rate, env=parameters)[i]
 
                 # check if this transition has an interaction
                 if tr.agent is not None:
