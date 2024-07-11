@@ -1,6 +1,6 @@
 # libraries
 from .transition import Transition
-from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, load_population, compute_simulation_dates
+from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, load_population, compute_simulation_dates, apply_initial_conditions
 from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
@@ -306,7 +306,15 @@ class EpiModel:
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
  
 
-    def run_simulations(self, start_date, end_date, steps="daily", Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, ppfun_args={}, **kwargs): 
+    def run_simulations(self, 
+                        start_date, 
+                        end_date, 
+                        steps="daily", 
+                        Nsim=100, 
+                        quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], 
+                        post_processing_function=lambda x: x, 
+                        ppfun_args={}, 
+                        **kwargs): 
         """
         Simulates the epidemic model over the given time period.
 
@@ -331,7 +339,7 @@ class EpiModel:
         # simulate
         simulated_compartments = {}
         for i in range(Nsim): 
-            results = simulate(self, simulation_dates, steps=steps, post_processing_function=post_processing_function, ppfun_args=ppfun_args, **kwargs) 
+            results = simulate(self, simulation_dates, post_processing_function=post_processing_function, ppfun_args=ppfun_args, **kwargs) 
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
         # compute quantiles
@@ -349,7 +357,11 @@ class EpiModel:
         return simulation_results
     
 
-def simulate(epimodel, simulation_dates, post_processing_function=lambda x, **kwargs: x, ppfun_args={}, **kwargs): 
+def simulate(epimodel, 
+             simulation_dates, 
+             post_processing_function=lambda x: x, 
+             ppfun_args={}, 
+             **kwargs): 
 
     # compute the contact reductions
     epimodel.compute_contact_reductions(simulation_dates)
@@ -364,11 +376,7 @@ def simulate(epimodel, simulation_dates, post_processing_function=lambda x, **kw
     epimodel.definitions = apply_overrides(epimodel.definitions, epimodel.overrides, simulation_dates)
 
     # initialize population in different compartments and demographic groups
-    initial_conditions = np.zeros((len(epimodel.compartments), len(epimodel.population.Nk)), dtype='int')
-    for comp in epimodel.compartments:
-        if comp in kwargs: 
-            if comp in epimodel.compartments:
-                initial_conditions[epimodel.compartments_idx[comp]] = kwargs[comp]
+    initial_conditions = apply_initial_conditions(epimodel, **kwargs)
 
     # run 
     compartments_evolution = stochastic_simulation(simulation_dates, epimodel, epimodel.definitions, initial_conditions)
@@ -458,3 +466,4 @@ def stochastic_simulation(simulation_dates, epimodel, parameters, initial_condit
         compartments_evolution.append(new_pop)
 
     return compartments_evolution
+

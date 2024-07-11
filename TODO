@@ -3,12 +3,8 @@
 - nowprocessing function (for custom operation during the simulation, such as variant introduction)
 - custom interaction term calculation 
 - rates that are arrays (different for each demographic, such as IFR)
-- add ValueError for protected sympy rate names
 - parallelization
 - add_interventions: would it make sense to distinguish between functions for new_matrix and reduction_factor?
-- add_interventions, add the possibility to modulate only the beta, or possibly any parameter
-- simulate(): take compute_quantiles out
-- think about how to "merge" simulate and stochastic_function, so that we always call simulate and not stochastic_function, also in the calibration. A possiblity can be to add a "prepare_simulation function that is called before every run. Simulate can also go out from EpiModel
 
 
 ## Calibration 
@@ -37,10 +33,7 @@
 - submodules divisions
 
 ## Population
-- add possibility to do the import directly from the init
-- make the population object an attribute of EpiModel, with default values
 
 
 ## Transitions
-- change the name of attribute rate_name, this is rather an expression
 - test transitions mediated by more agents (in the future we can also speed up these cases by factoring out the matrix product)

@@ -229,3 +229,14 @@ def compute_simulation_dates(start_date, end_date, steps="daily"):
         simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
 
     return simulation_dates
+
+
+def apply_initial_conditions(epimodel, **kwargs): 
+    # initialize population in different compartments and demographic groups
+    initial_conditions = np.zeros((len(epimodel.compartments), len(epimodel.population.Nk)), dtype='int')
+    for comp in epimodel.compartments:
+        if comp in kwargs: 
+            if comp in epimodel.compartments:
+                initial_conditions[epimodel.compartments_idx[comp]] = kwargs[comp]
+
+    return initial_conditions
