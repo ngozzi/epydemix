@@ -18,7 +18,6 @@
     - returns all the runs 
     - select top_perc runs a posteriori
 - parallelization also on more simple calibrations
-- run projections sampling from the posterior
 
 
 ## Plotting 

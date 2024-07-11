@@ -14,7 +14,7 @@ class EpiModel:
     EpiModel Class
     """
 
-    def __init__(self, compartments=[], population_name="epydemix_population", population_data_path=None):
+    def __init__(self, compartments=[], population_name="epydemix_population", population_data_path=None, contact_layers=["school", "work", "home", "community"]):
         """
         EpiModel constructor
         """
@@ -30,7 +30,7 @@ class EpiModel:
         self.Cs = {}
 
         if population_data_path is not None: 
-            self.population = load_population(population_name, path_to_data=population_data_path)
+            self.population = load_population(population_name, path_to_data=population_data_path, layers=contact_layers)
         else: 
             self.population = Population(name=population_name)
             self.population.add_contact_matrix(np.array([[0.5, 0.5], [0.5, 0.5]]))
