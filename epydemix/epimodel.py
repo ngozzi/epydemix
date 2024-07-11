@@ -306,7 +306,7 @@ class EpiModel:
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
  
 
-    def run_simulations(self, start_date, end_date, steps="daily", Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, **kwargs): 
+    def run_simulations(self, start_date, end_date, steps="daily", Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, ppfun_args={}, **kwargs): 
         """
         Simulates the epidemic model over the given time period.
 
@@ -331,7 +331,7 @@ class EpiModel:
         # simulate
         simulated_compartments = {}
         for i in range(Nsim): 
-            results = simulate(self, simulation_dates, steps=steps, post_processing_function=post_processing_function, **kwargs) 
+            results = simulate(self, simulation_dates, steps=steps, post_processing_function=post_processing_function, ppfun_args=ppfun_args, **kwargs) 
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
         # compute quantiles
@@ -349,9 +349,7 @@ class EpiModel:
         return simulation_results
     
 
-def simulate(epimodel, simulation_dates, post_processing_function=lambda x, **kwargs: x, **kwargs): 
-
-    arguments = locals().copy()
+def simulate(epimodel, simulation_dates, post_processing_function=lambda x, **kwargs: x, ppfun_args={}, **kwargs): 
 
     # compute the contact reductions
     epimodel.compute_contact_reductions(simulation_dates)
@@ -379,7 +377,7 @@ def simulate(epimodel, simulation_dates, post_processing_function=lambda x, **kw
     results = format_simulation_output(np.array(compartments_evolution)[1:], epimodel.compartments_idx, epimodel.population.Nk_names)
 
     # apply post_processing 
-    results = post_processing_function(results, **arguments)
+    results = post_processing_function(results, **ppfun_args)
     
     return results
 
