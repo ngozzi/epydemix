@@ -73,7 +73,7 @@ def compute_quantiles(data, simulation_dates, axis=0, quantiles=[0.025, 0.05, 0.
     return df_quantile
 
 
-def format_simulation_output(simulation_output, parameters): 
+def format_simulation_output(simulation_output, compartments_idx, Nk_names): 
     """
     Formats the simulation output into a dictionary with compartment and demographic information.
 
@@ -81,10 +81,8 @@ def format_simulation_output(simulation_output, parameters):
     -----------
         - simulation_output (np.ndarray): A 3D array containing the simulation results.
                                           The dimensions are expected to be (time_steps, compartments, demographics).
-        - parameters (dict): A dictionary containing the simulation parameters.
-                             It must include:
-                             - "epimodel": An object with a `compartments_idx` attribute, which is a dictionary mapping compartment names to their indices.
-                             - "population": An object with a `Nk_names` attribute, which is a list of demographic group names.
+        - compartments_idx (dict): dictionary mapping compartment names to their indices.
+        - Nk_names (list): a list of demographic group names.
 
     Returns:
     --------
@@ -92,11 +90,10 @@ def format_simulation_output(simulation_output, parameters):
                 An additional key "compartment_total" is included for each compartment, representing the sum across all demographics.
     """
     formatted_output = {}
-    for comp, pos in parameters["epimodel"].compartments_idx.items(): 
-        for i, dem in enumerate(parameters["epimodel"].population.Nk_names): 
+    for comp, pos in compartments_idx.items(): 
+        for i, dem in enumerate(Nk_names): 
             formatted_output[f"{comp}_{dem}"] = simulation_output[:, pos, i]
         formatted_output[f"{comp}_total"] = np.sum(simulation_output[:, pos, :], axis=1)
-
     return formatted_output
 
 

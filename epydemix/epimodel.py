@@ -307,7 +307,7 @@ class EpiModel:
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
  
 
-    def run_simulations(self, start_date, end_date, steps="daily", dt=None, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, **kwargs): 
+    def run_simulations(self, start_date, end_date, steps="daily", Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, **kwargs): 
         """
         Simulates the epidemic model over the given time period.
 
@@ -316,7 +316,6 @@ class EpiModel:
             - start_date (str or pd.Timestamp): The start date of the simulation.
             - end_date (str or pd.Timestamp): The end date of the simulation.
             - steps (int or str): The number of time steps in the simulation (default is daily, implying that the simulation step will be automatically 1 day)
-            - dt (float): The length of the simulation step referred to 1 day (default is None).
             - Nsim (int, optional): The number of simulation runs to perform (default is 100).
             - quantiles (list of float, optional): A list of quantiles to compute for the simulation results (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
             - **kwargs: Additional arguments to pass to the stochastic simulation function.
@@ -326,28 +325,15 @@ class EpiModel:
             - simulated_compartments (list of np.ndarray): The results of the simulated compartments for each run.
             - df_quantiles (pd.DataFrame): A DataFrame containing the quantile values for each compartment, demographic group, and date.
         """
-
-        # compute simulation dates
-        simulation_dates = compute_simulation_dates(start_date, end_date)
-
-        # compute contact reductions
-        self.compute_contact_reductions(simulation_dates)
-
-        # simulation parameters 
-        parameters = {"simulation_dates": simulation_dates, 
-                      "epimodel": self, 
-                      "dt": np.diff(simulation_dates)[0] / timedelta(days=1) if dt is None else dt}
-
-        # add initial conditions to parameters
-        for comp in kwargs: 
-            parameters[comp] = kwargs[comp]
         
         # simulate
         simulated_compartments = {}
         for i in range(Nsim): 
-            results = stochastic_simulation(parameters=parameters, post_processing_function=post_processing_function)
+            results = simulate(self, start_date, end_date, steps=steps, post_processing_function=post_processing_function, **kwargs) 
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
+        # compute quantiles
+        simulation_dates = compute_simulation_dates(start_date, end_date, steps=steps)
         simulated_compartments = {k: np.array(v) for k, v in simulated_compartments.items()}
         df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles)
         
@@ -357,15 +343,49 @@ class EpiModel:
         simulation_results.set_df_quantiles(df_quantiles)
         simulation_results.set_full_trajectories(simulated_compartments)
         simulation_results.set_compartment_idx(self.compartments_idx)
-        simulation_results.set_parameters(parameters)
+        simulation_results.set_parameters(self.parameters)
 
         return simulation_results
     
-def simulate(): 
-    return 0
+
+def simulate(epimodel, start_date, end_date, steps="daily", post_processing_function=lambda x, **kwargs: x, **kwargs): 
+
+    arguments = locals().copy()
+    # compute the simulation dates 
+    simulation_dates = compute_simulation_dates(start_date, end_date, steps=steps)
+
+    # compute the contact reductions
+    epimodel.compute_contact_reductions(simulation_dates)
+
+    # check if some parameter need to be overwritten (prior)
+    for k in kwargs: 
+        if k in epimodel.parameters: 
+            epimodel.parameters[k] = kwargs[k]
+
+    # compute the definitions and overrides
+    epimodel.definitions = create_definitions(epimodel.parameters, len(simulation_dates))
+    epimodel.definitions = apply_overrides(epimodel.definitions, epimodel.overrides, simulation_dates)
+
+    # initialize population in different compartments and demographic groups
+    initial_conditions = np.zeros((len(epimodel.compartments), len(epimodel.population.Nk)), dtype='int')
+    for comp in epimodel.compartments:
+        if comp in kwargs: 
+            if comp in epimodel.compartments:
+                initial_conditions[epimodel.compartments_idx[comp]] = kwargs[comp]
+
+    # run 
+    compartments_evolution = stochastic_simulation(simulation_dates, epimodel, epimodel.definitions, initial_conditions)
+
+    # format simulation output
+    results = format_simulation_output(np.array(compartments_evolution)[1:], epimodel.compartments_idx, epimodel.population.Nk_names)
+
+    # apply post_processing 
+    results = post_processing_function(results, **arguments)
+    
+    return results
 
 
-def stochastic_simulation(parameters, post_processing_function=lambda x, **kwargs: x): 
+def stochastic_simulation(simulation_dates, epimodel, parameters, initial_conditions): 
     """
     Run a stochastic simulation of the epidemic model over the specified time period.
 
@@ -384,28 +404,13 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
         - np.ndarray: A 3D array representing the evolution of compartment populations over time. The shape of the 
                     array is (time_steps, num_compartments, num_demographic_groups).
     """
-
-    epimodel = parameters["epimodel"]
-
-    # check if some parameter need to be overwritten (prior)
-    for k in parameters.keys(): 
-        if k in epimodel.parameters: 
-            epimodel.parameters[k] = parameters[k]
  
-    # compute parameter definitions and apply overrides
-    epimodel.definitions = create_definitions(epimodel.parameters, len(parameters["simulation_dates"]))
-    epimodel.definitions = apply_overrides(epimodel.definitions, epimodel.overrides, parameters["simulation_dates"])
-    parameters.update(epimodel.definitions)
-
-    # initialize population in different compartments and demographic groups
-    compartments_population = np.zeros((len(epimodel.compartments), len(epimodel.population.Nk)), dtype='int')
-    for comp in epimodel.compartments:
-        if comp in parameters.keys(): 
-            compartments_population[epimodel.compartments_idx[comp]] = parameters[comp]
-    compartments_evolution = [compartments_population]     
+    compartments_evolution = [initial_conditions]
+    # compute dt simulation 
+    dt = np.diff(simulation_dates)[0] / timedelta(days=1)
 
     # simulate
-    for i, date in enumerate(epimodel.Cs.keys()):
+    for i, date in enumerate(simulation_dates):
 
         # get today contacts matrix and seasonality adjustment
         C = epimodel.Cs[date]["overall"]
@@ -430,7 +435,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
                     agent = epimodel.compartments_idx[tr.agent]  # get agent position
                     interaction = np.array([np.sum(C[age, :] * pop[agent, :] / epimodel.population.Nk) for age in range(len(epimodel.population.Nk))])
                     rate *= interaction        # interaction term
-                prob[target, :] += rate * parameters["dt"]
+                prob[target, :] += rate * dt
 
             # exponential of 
             prob = 1 - np.exp(-prob)
@@ -455,9 +460,4 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
 
         compartments_evolution.append(new_pop)
 
-    # format simulation output
-    results = format_simulation_output(np.array(compartments_evolution)[1:], parameters)
-
-    # apply post_processing 
-    results = post_processing_function(results, **parameters)
-    return results
+    return compartments_evolution
