@@ -132,7 +132,7 @@ def calibration_abc_smc(simulation_function,
     
 
     def model(p): 
-        return {'data': simulation_function({**p, **parameters}, post_processing_function=post_processing_function)['data']}
+        return {'data': simulation_function({**p, **parameters})['data']}
 
     if filename == '':
         filename = str(uuid.uuid4())

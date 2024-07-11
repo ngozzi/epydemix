@@ -7,7 +7,6 @@ import pandas as pd
 from numpy.random import multinomial
 from datetime import timedelta
 from epydemix.population import Population
-import uuid
 
 
 class EpiModel:
@@ -326,14 +325,16 @@ class EpiModel:
             - df_quantiles (pd.DataFrame): A DataFrame containing the quantile values for each compartment, demographic group, and date.
         """
         
+        # compute the simulation dates 
+        simulation_dates = compute_simulation_dates(start_date, end_date, steps=steps)
+
         # simulate
         simulated_compartments = {}
         for i in range(Nsim): 
-            results = simulate(self, start_date, end_date, steps=steps, post_processing_function=post_processing_function, **kwargs) 
+            results = simulate(self, simulation_dates, steps=steps, post_processing_function=post_processing_function, **kwargs) 
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
         # compute quantiles
-        simulation_dates = compute_simulation_dates(start_date, end_date, steps=steps)
         simulated_compartments = {k: np.array(v) for k, v in simulated_compartments.items()}
         df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles)
         
@@ -348,11 +349,9 @@ class EpiModel:
         return simulation_results
     
 
-def simulate(epimodel, start_date, end_date, steps="daily", post_processing_function=lambda x, **kwargs: x, **kwargs): 
+def simulate(epimodel, simulation_dates, post_processing_function=lambda x, **kwargs: x, **kwargs): 
 
     arguments = locals().copy()
-    # compute the simulation dates 
-    simulation_dates = compute_simulation_dates(start_date, end_date, steps=steps)
 
     # compute the contact reductions
     epimodel.compute_contact_reductions(simulation_dates)
