@@ -16,8 +16,7 @@ def calibration_top_perc(simulation_function,
                          data,
                          top_perc=0.05,
                          error_metric=rmse,
-                         Nsim=100, 
-                         post_processing_function=None): 
+                         Nsim=100): 
             
     """
     Calibrates the model by selecting the top percentage of simulations based on the chosen error metric.
@@ -31,7 +30,6 @@ def calibration_top_perc(simulation_function,
         top_perc (float, optional): The top percentage of simulations to select based on the error metric (default is 0.05).
         error_metric (callable, optional): The error metric function used to evaluate the simulations (default is rmse).
         Nsim (int, optional): The number of simulation runs to perform (default is 100).
-        post_processing_function (callable, optional): A function for post-processing the simulation results (default is None).
 
     Returns:
     --------
@@ -49,11 +47,7 @@ def calibration_top_perc(simulation_function,
             sampled_params[param].append(rv)
             simulation_params[param] = rv
 
-        if post_processing_function is None:
-            results = simulation_function(simulation_params)
-        else: 
-            results = simulation_function(simulation_params, post_processing_function=post_processing_function)
-            
+        results = simulation_function(simulation_params)
         simulations.append(results)
         errors.append(error_metric(data=data, simulation=results))
 
@@ -95,7 +89,6 @@ def calibration_abc_smc(simulation_function,
                          parameters, 
                          data,
                          error_metric=rmse,
-                         post_processing_function=None,
                          transitions : pyabc.AggregatedTransition = None,
                          max_walltime : timedelta = None,
                          population_size : int = 1000,
@@ -115,7 +108,6 @@ def calibration_abc_smc(simulation_function,
         parameters (dict): A dictionary of fixed parameters used in the simulation.
         data (dict): A dictionary containing the observed data with a key "data" pointing to an array of observations.
         error_metric (callable, optional): The error metric function used to evaluate the simulations (default is rmse).
-        post_processing_function (callable, optional): A function for post-processing the simulation results (default is None).
         transitions (pyabc.AggregatedTransition, optional): Transition kernel for the ABC-SMC algorithm (default is None).
         max_walltime (timedelta, optional): The maximum walltime for the ABC-SMC run (default is None).
         population_size (int, optional): The size of the population for each ABC-SMC generation (default is 1000).
