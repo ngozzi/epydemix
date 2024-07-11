@@ -16,7 +16,9 @@ def calibration_top_perc(simulation_function,
                          data,
                          top_perc=0.05,
                          error_metric=rmse,
-                         Nsim=100): 
+                         Nsim=100, 
+                         include_quantiles=True, 
+                         dates_column="simulation_dates"): 
             
     """
     Calibrates the model by selecting the top percentage of simulations based on the chosen error metric.
@@ -63,9 +65,6 @@ def calibration_top_perc(simulation_function,
     for res in selected_simulations:
         selected_simulations_formatted = combine_simulation_outputs(selected_simulations_formatted, res)
 
-    # compute quantiles 
-    selected_simulations_quantiles = compute_quantiles(selected_simulations_formatted, simulation_dates=simulation_params["simulation_dates"])
-
     # select parameters
     selected_params = {p: np.array(arr)[idxs] for p, arr in sampled_params.items()}
 
@@ -79,7 +78,12 @@ def calibration_top_perc(simulation_function,
     results.set_calibration_params({"top_perc": top_perc, 
                                     "error_metric": error_metric, 
                                     "Nsim": Nsim})
-    results.set_selected_quantiles(selected_simulations_quantiles)
+    results.set_error_distribution(np.array(errors)[idxs])
+
+    if include_quantiles: 
+        # compute quantiles 
+        selected_simulations_quantiles = compute_quantiles(selected_simulations_formatted, simulation_dates=simulation_params[dates_column])
+        results.set_selected_quantiles(selected_simulations_quantiles)
 
     return results
 
@@ -95,6 +99,8 @@ def calibration_abc_smc(simulation_function,
                          minimum_epsilon : float = 0.15, 
                          max_nr_populations : int = 10, 
                          filename : str = '', 
+                         include_quantiles : bool = True,
+                         dates_column="simulation_dates",
                          run_id = None, 
                          db = None): 
     
@@ -159,8 +165,48 @@ def calibration_abc_smc(simulation_function,
                                     "minimum_epsilon": minimum_epsilon,
                                     "error_metric": error_metric, 
                                     "max_nr_populations": max_nr_populations,
-                                    "max_walltime": max_walltime})
-    selected_simulations_quantiles = compute_quantiles({"data": [d["data"] for d in history.get_weighted_sum_stats()[1]]}, simulation_dates=parameters["simulation_dates"])
+                                    "max_walltime": max_walltime, 
+                                    "history": history})
     results.set_selected_quantiles(selected_simulations_quantiles)
+    results.set_error_distribution(history.get_weighted_distances()["distance"].values)
+    
+    if include_quantiles: 
+        # compute quantiles 
+        selected_simulations_quantiles = compute_quantiles({"data": [d["data"] for d in history.get_weighted_sum_stats()[1]]}, simulation_dates=parameters[dates_column])
+        results.set_selected_quantiles(selected_simulations_quantiles)
     
     return results
+
+
+def run_projections(simulation_function, 
+                    calibration_results, 
+                    parameters, 
+                    iterations=100, 
+                    include_quantiles=True, 
+                    dates_column="simulation_dates"): 
+
+    # get posterior distribution
+    posterior_distribution = calibration_results.get_posterior_distribution()
+
+    # iterate
+    simulations = []
+    for n in range(iterations): 
+        # sample from posterior
+        posterior_sample = posterior_distribution.iloc[np.random.randint(0, len(posterior_distribution))]
+        
+        # prepare and run simulation
+        parameters.update(posterior_sample)
+        result_projections = simulation_function(parameters)
+        simulations.append(result_projections)
+
+    # format simulation results
+    selected_simulations_formatted = {}
+    for res in simulations:
+        selected_simulations_formatted = combine_simulation_outputs(selected_simulations_formatted, res)
+
+    if include_quantiles:
+        selected_simulations_quantiles = compute_quantiles(selected_simulations_formatted, simulation_dates=parameters[dates_column])
+        return selected_simulations_quantiles
+    
+    else: 
+        return selected_simulations_formatted

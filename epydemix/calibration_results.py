@@ -10,6 +10,7 @@ class CalibrationResults():
         self.data = []
         self.priors = {}
         self.calibration_params = {}
+        self.errors = []
 
     def set_calibration_strategy(self, strategy):
         self.calibration_strategy = strategy
@@ -32,6 +33,9 @@ class CalibrationResults():
     def set_calibration_params(self, calibration_params):
         self.calibration_params = calibration_params
 
+    def set_error_distribution(self, errors): 
+        self.errors = errors
+
     def get_calibration_strategy(self):
         return self.calibration_strategy
 
@@ -52,3 +56,7 @@ class CalibrationResults():
 
     def get_calibration_params(self):
         return self.calibration_params
+    
+    def get_error_distribution(self): 
+        return self.errors
+    

@@ -19,7 +19,6 @@
     - select top_perc runs a posteriori
 - parallelization also on more simple calibrations
 - run projections sampling from the posterior
-- add to CalibrationResults the performance of selected trajectories (distribution and average error metric)
 
 
 ## Plotting 

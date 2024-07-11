@@ -420,3 +420,110 @@ def compute_spectral_radius(m):
     """
     return np.max(np.abs(np.linalg.eigvals(m)))
     
+
+def plot_error_distribution(calibration_results, ax=None, xlabel=None, kind="hist", color="dodgerblue", ylabel="", **kwargs): 
+    """
+    Plots the error distribution from the calibration results.
+
+    Parameters:
+    -----------
+        calibration_results (CalibrationResults): An object containing the calibration results, including the posterior distribution.
+        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        xlabel (str, optional): The label for the x-axis (default is None).
+        kind (str, optional): The type of plot to generate; options are "hist" for histogram, "kde" for kernel density estimate, and "ecdf" for empirical cumulative distribution function (default is "hist").
+        color (str, optional): The color to use for the plot (default is "dodgerblue").
+        ylabel (str, optional): The label for the y-axis (default is "").
+        **kwargs: Additional keyword arguments to pass to the seaborn plotting function.
+
+    Returns:
+    --------
+        None: This function does not return any values; it produces a plot.
+    """
+        
+    if ax is None:
+        fig, ax = plt.subplots(dpi=300, figsize=(10,4))
+
+    errors = calibration_results.get_error_distribution()
+    if kind == "hist":
+        sns.histplot(data=errors, ax=ax, color=color, **kwargs)
+    elif kind == "kde": 
+        sns.kdeplot(data=errors, ax=ax, fill=True, color=color, **kwargs)
+    elif kind == "ecdf": 
+        sns.ecdfplot(data=errors, ax=ax, color=color, **kwargs)
+    else: 
+        raise ValueError("Unknown kind for plot: %s" % kind)
+
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+
+    ax.set_ylabel(ylabel)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.grid(axis="y", linestyle="--", linewidth=0.3)
+
+
+def plot_projections(projections, calibration_results, ax=None, show_data=True, columns="data", 
+                     lower_q=0.05, upper_q=0.95, show_median=True, 
+                     ci_alpha=0.3, title="", show_legend=True, ylabel="", 
+                     palette="Set2"):
+
+    """
+    Plots the selected quantiles from the calibration results.
+
+    Parameters:
+    -----------
+        calibration_results (CalibrationResults): An object containing the calibration results, including selected quantiles and observed data.
+        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        show_data (bool, optional): Whether to show the observed data points (default is True).
+        columns (str or list of str, optional): The columns to plot from the quantiles data (default is "data").
+        lower_q (float, optional): The lower quantile to plot (default is 0.05).
+        upper_q (float, optional): The upper quantile to plot (default is 0.95).
+        show_median (bool, optional): Whether to show the median line (default is True).
+        ci_alpha (float, optional): The alpha value for the confidence interval shading (default is 0.3).
+        title (str, optional): The title of the plot (default is "").
+        show_legend (bool, optional): Whether to show the legend (default is True).
+        ylabel (str, optional): The label for the y-axis (default is "").
+        palette (str, optional): The color palette to use for the plot (default is "Set2").
+
+    Returns:
+    --------
+        None: This function does not return any values; it produces a plot.
+    """
+    
+    if not isinstance(columns, list):
+        columns = [columns]
+    
+    if ax is None:
+        fig, ax = plt.subplots(dpi=300, figsize=(10,4))
+
+    # get data
+    calibration_quantiles = calibration_results.get_selected_quantiles()
+    data = calibration_results.get_data()
+
+    colors = sns.color_palette(palette, len(columns))
+    t = 0
+
+    pleg, handles = [], []
+    for column in columns:
+        if show_median:
+            df_med = get_timeseries_data(projections, column, 0.5)
+            p1, = ax.plot(df_med.date, df_med[column].values, color=colors[t])
+
+        df_q1 = get_timeseries_data(projections, column, lower_q)
+        df_q2 = get_timeseries_data(projections, column, upper_q)
+        p2 = ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values, alpha=ci_alpha, color=colors[t], linewidth=0.)
+        pleg.append((p1, p2))
+        handles.append(f"median ({np.round((1 - lower_q * 2) * 100, 0)}% CI)")
+        t += 1
+
+    if show_data: 
+        p_actual = ax.scatter(calibration_quantiles.date.unique(), data["data"], s=10, color="k", zorder=1)
+
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.grid(axis="y", linestyle="--", linewidth=0.3)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    if show_legend:
+        ax.legend(pleg + [p_actual], handles + ["actual"], loc="upper left", frameon=False)
+
