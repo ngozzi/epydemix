@@ -4,10 +4,12 @@ from .calibration_results import CalibrationResults
 from .utils import compute_quantiles, combine_simulation_outputs
 from .metrics import *
 import pyabc
-from datetime import timedelta
+from datetime import datetime, timedelta
 import uuid
 import os 
 import tempfile
+from scipy import stats
+from .abc_smc_utils import initialize_particles, perturbation_kernel, compute_covariance_matrix, compute_weights, compute_effective_sample_size
 
 
 def calibration_top_perc(simulation_function, 
@@ -88,7 +90,7 @@ def calibration_top_perc(simulation_function,
     return results
 
 
-def calibration_abc_smc(simulation_function, 
+def calibration_abc_smc_old(simulation_function, 
                          priors, 
                          parameters, 
                          data,
@@ -167,12 +169,121 @@ def calibration_abc_smc(simulation_function,
                                     "max_nr_populations": max_nr_populations,
                                     "max_walltime": max_walltime, 
                                     "history": history})
-    results.set_selected_quantiles(selected_simulations_quantiles)
+    #results.set_selected_quantiles(selected_simulations_quantiles)
     results.set_error_distribution(history.get_weighted_distances()["distance"].values)
     
     if include_quantiles: 
         # compute quantiles 
         selected_simulations_quantiles = compute_quantiles({"data": [d["data"] for d in history.get_weighted_sum_stats()[1]]}, simulation_dates=parameters[dates_column])
+        results.set_selected_quantiles(selected_simulations_quantiles)
+    
+    return results
+
+
+def calibration_abc_smc(model, 
+                 priors, 
+                 parameters, 
+                 observed_data, 
+                 perturbation_kernel = perturbation_kernel, 
+                 distance_function = rmse, 
+                 p_discrete_transition : float = 0.3,
+                 num_particles : int = 1000, 
+                 max_generations : int = 10, 
+                 tolerance_quantile : float = 0.50,
+                 minimum_tolerance : float = 0.15, 
+                 max_time : timedelta = None,
+                 include_quantiles : bool = True, 
+                 dates_column = "simulation_dates"): 
+    
+    start_time = datetime.now()
+
+    # get continuous and discrete parameters
+    continuous_params, discrete_params = [], []
+    for param in priors:
+        if isinstance(priors[param].dist, stats.rv_continuous):
+            continuous_params.append(param)
+        elif isinstance(priors[param].dist, stats.rv_discrete):
+            discrete_params.append(param)
+
+    particles, weights, tolerance = initialize_particles(priors, num_particles)
+
+    for generation in range(max_generations):
+
+        start_generation_time = datetime.now()
+
+        # compute covariance matrix
+        cov_matrix = compute_covariance_matrix(particles, continuous_params)
+        
+        new_particles = []
+        distances = []
+        simulated_points = []
+
+        total_accepted, total_simulations = 0, 0
+        while total_accepted < num_particles:
+
+            # Sample and Perturb particle
+            i = np.random.choice(range(num_particles), p=weights)
+            particle = perturbation_kernel(particles[i], continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition)
+
+            # Simulate data from perturbed particle
+            full_params = {}
+            full_params.update(particle)
+            full_params.update(parameters)
+            simulated_data = model(full_params)
+            total_simulations += 1
+
+            # Calculate distance and Accept/Reject
+            distance = distance_function(observed_data, simulated_data)
+            if distance < tolerance:
+                new_particles.append(particle)
+                distances.append(distance)
+                total_accepted += 1
+                simulated_points.append(simulated_data["data"])
+
+        # Update particles and weights
+        weights = compute_weights(new_particles, particles, weights, priors, cov_matrix, continuous_params, discrete_params, p_discrete_transition)
+        particles = new_particles
+
+        # Update tolerance for the next generation
+        tolerance = np.quantile(distances, tolerance_quantile)
+
+        # Print generation information
+        ESS = compute_effective_sample_size(weights)
+        end_generation_time = datetime.now()
+        print(f"Generation {generation + 1}: Tolerance = {tolerance}, Accepted Particles = {len(new_particles)}/{total_simulations}, Time = {end_generation_time - start_generation_time}, ESS = {ESS}")
+
+        # Chek if the tolerance is below the minimum
+        if tolerance < minimum_tolerance:
+            print(f"Minimum tolerance reached at generation {generation + 1}")
+            break
+
+        # Check if the walltime has been reached
+        if max_time is not None and datetime.now() - start_time > max_time:
+            print(f"Maximum time reached at generation {generation + 1}")
+            break
+
+    # format output
+    results = CalibrationResults()
+    results.set_calibration_strategy("abc_smc")
+
+    posterior_dict = {}
+    for param in priors.keys(): 
+        posterior_dict[param] = [sample[param] for sample in particles]
+    posterior_dict["weights"] = weights
+    results.set_posterior_distribution(pd.DataFrame(posterior_dict))
+    results.set_selected_trajectories(np.array(simulated_points))
+    results.set_data(observed_data)
+    results.set_priors(priors)
+    results.set_calibration_params({"num_particles": num_particles,
+                                    "minimum_tolerance": minimum_tolerance,
+                                    "distance_function": distance_function, 
+                                    "max_generations": max_generations,
+                                    "max_time": max_time})
+    results.set_error_distribution(distances)
+    
+    if include_quantiles: 
+        # compute quantiles 
+        selected_simulations_quantiles = compute_quantiles({"data": simulated_points}, simulation_dates=parameters[dates_column])
         results.set_selected_quantiles(selected_simulations_quantiles)
     
     return results
