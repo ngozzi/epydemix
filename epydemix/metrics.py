@@ -59,9 +59,7 @@ def wmape(data, simulation):
         float: The wMAPE value indicating the weighted average of the absolute percentage errors between the observed and simulated data.
     """
     observed, simulated = validate_data(data, simulation)
-    absolute_errors = np.abs(observed - simulated)
-    weighted_absolute_errors = absolute_errors / observed
-    return np.sum(weighted_absolute_errors) / np.sum(1 / observed)
+    return np.sum(np.abs(observed - simulated)) / np.sum(np.abs(observed))
 
 
 def ae(data, simulation):

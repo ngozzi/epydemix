@@ -1,18 +1,20 @@
 # libraries
 from .transition import Transition
-from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs
+from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, load_population, compute_simulation_dates, apply_initial_conditions
 from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
 from datetime import timedelta
+from epydemix.population import Population
+
 
 class EpiModel:
     """
     EpiModel Class
     """
 
-    def __init__(self, compartments=[], parameters={}):
+    def __init__(self, compartments=[], population_name="epydemix_population", population_data_path=None, contact_layers=["school", "work", "home", "community"]):
         """
         EpiModel constructor
         """
@@ -22,9 +24,17 @@ class EpiModel:
         self.compartments = []
         self.compartments_idx = {}
         self.parameters = {}
+        self.definitions = {}
+        self.overrides = {}
         self.add_compartments(compartments)
-        self.add_parameters(parameters)
         self.Cs = {}
+
+        if population_data_path is not None: 
+            self.population = load_population(population_name, path_to_data=population_data_path, layers=contact_layers)
+        else: 
+            self.population = Population(name=population_name)
+            self.population.add_contact_matrix(np.array([[0.5, 0.5], [0.5, 0.5]]))
+            self.population.add_population(np.array([50000, 50000]))
 
 
     def add_compartments(self, compartments): 
@@ -55,17 +65,102 @@ class EpiModel:
             self.compartments_idx[compartments] = max_idx + 1
 
 
-    def add_parameters(self, parameters):
+    def clear_compartments(self): 
         """
-        Add new parameters to the epidemic model.
+        Clears the compartments list.
+        """
+        self.compartments = []
+        self.compartments_idx = {}
+
+
+    def add_parameter(self, name=None, value=None, parameters_dict=None):
+        """
+        Add new parameters to the model.
+
+        Parameters:
+        -----------
+        name : str, optional
+            The name of the parameter.
+        value : any, optional
+            The value of the parameter.
+        parameters_dict : dict, optional
+            A dictionary of parameter names and values.
+
+        If `parameters_dict` is provided, `name` and `value` are ignored and
+        the parameters are updated using the dictionary.
+        """
+        if parameters_dict:
+            self.parameters.update(parameters_dict)
+        elif name is not None and value is not None:
+            self.parameters.update({name: value})
+        else:
+            raise ValueError("Either name and value or parameters_dict must be provided.")
+
+
+    def get_parameter(self, name): 
+        """
+        Return the value of a parameter
 
         Parameters: 
-            - parameters (dict): A dictionary of parameters
+            - name (str): The nema of the parameter
         """
-        self.parameters.update(parameters)
+        return self.parameters[name]
 
 
-    def add_transition(self, source, target, rate_name, agent=None):
+    def delete_parameter(self, name): 
+        """
+        Delete a parameter from the dictionary of model's parameters
+
+        Parameters: 
+            - name (str): The name of the parameter
+        """
+        return self.parameters.pop(name)
+    
+
+    def clear_parameters(self):
+        """
+        Clears the parameters dictionary.
+        """
+        self.parameters = {}
+
+
+    def override_parameter(self, start_date, end_date, name, value):
+        """
+        Adds an override for a parameter with the specified name.
+
+        Parameters:
+        -----------
+            - start_date (str): The start date for the override period.
+            - end_date (str): The end date for the override period
+            - name (str): The name of the parameter to override.
+            - value (any): The value to override the parameter with.
+        """
+        override_dict = {"start_date": start_date, "end_date": end_date, "value": value}
+            
+        if name in self.overrides:
+            self.overrides[name].append(override_dict)
+        else:
+            self.overrides[name] = [override_dict]
+
+
+    def delete_override(self, name): 
+        """
+        Delete overrides for a parameter 
+
+        Parameters: 
+            - name (str): The name of the parameter
+        """
+        self.overrides.pop(name)
+
+
+    def clear_overrides(self): 
+        """
+        Clears the overrides dictionary.
+        """
+        self.overrides = {}
+
+
+    def add_transition(self, source, target, rate, agent=None):
         """
         Adds a transition to the epidemic model.
 
@@ -73,8 +168,7 @@ class EpiModel:
         -----------
             - source (str): The source compartment of the transition.
             - target (str): The target compartment of the transition.
-            - rate_name (str): The name of the rate for the transition.
-            - rate (float, optional): The rate at which the transition occurs (default is None).
+            - rate (str, float): The expression or the value of the rate for the transition.
             - agent (str, optional): The interacting agent for the transition (default is None).
 
         Raises:
@@ -87,13 +181,28 @@ class EpiModel:
         if missing_compartments:
             raise ValueError(f"These compartments are not in the compartments list: {', '.join(missing_compartments)}")
 
-        transition = Transition(source=source, target=target, rate_name=rate_name, agent=agent)
+        if isinstance(rate, str):
+            transition = Transition(source=source, target=target, rate=rate, agent=agent)
+        else: 
+            # create unique name for rate 
+            rate_name = generate_unique_string()
+            transition = Transition(source=source, target=target, rate=rate_name, agent=agent)
+            # add rate to parameters
+            self.add_parameter(name=rate_name, value=rate)
 
         # Append to transitions list
         self.transitions_list.append(transition)
 
         # Add transition to the dictionary
         self.transitions[source].append(transition)
+
+    
+    def clear_transitions(self): 
+        """
+        Clears the transitions list.
+        """
+        self.transitions_list = []
+        self.transitions = {comp: [] for comp in self.compartments}
 
 
     def add_intervention(self, layer_name, start_date, end_date, reduction_factor=None, new_matrix=None, name=""): 
@@ -131,6 +240,13 @@ class EpiModel:
             "name": name
         })
 
+            
+    def clear_interventions(self):
+        """
+        Clears the interventions list.
+        """
+        self.interventions = [] 
+
 
     def apply_intervention(self, intervention, simulation_dates):
         """
@@ -164,7 +280,7 @@ class EpiModel:
                     self.Cs[date][intervention["layer"]] = intervention["new_matrix"]
 
 
-    def compute_contact_reductions(self, population, simulation_dates): 
+    def compute_contact_reductions(self, simulation_dates): 
         """
         Computes the contact reductions for a population over the given simulation dates.
 
@@ -173,7 +289,6 @@ class EpiModel:
 
         Parameters:
         -----------
-            - population (object): An object containing population data, particularly the contact matrices.
             - simulation_dates (list of pd.Timestamp): A list of dates over which the simulation is run.
 
         Returns:
@@ -182,26 +297,32 @@ class EpiModel:
                     including the overall contact matrix after applying interventions.
         """
         # apply interventions
-        self.Cs = {date: {l: c for l, c in population.contact_matrices.items()} for date in simulation_dates}
+        self.Cs = {date: {l: c for l, c in self.population.contact_matrices.items()} for date in simulation_dates}
         for intervention in self.interventions:
             self.apply_intervention(intervention, simulation_dates) 
         
         # compute overall contacts
         for date in self.Cs.keys(): 
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
+ 
 
-
-    def simulate(self, population, start_date, end_date, steps="daily", dt=None, Nsim=100, quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], post_processing_function=lambda x, **kwargs: x, **kwargs): 
+    def run_simulations(self, 
+                        start_date, 
+                        end_date, 
+                        steps="daily", 
+                        Nsim=100, 
+                        quantiles=[0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], 
+                        post_processing_function=lambda x: x, 
+                        ppfun_args={}, 
+                        **kwargs): 
         """
         Simulates the epidemic model over the given time period.
 
         Parameters:
         -----------
-            - population (object): An object containing population data, particularly the contact matrices and demographic groups.
             - start_date (str or pd.Timestamp): The start date of the simulation.
             - end_date (str or pd.Timestamp): The end date of the simulation.
             - steps (int or str): The number of time steps in the simulation (default is daily, implying that the simulation step will be automatically 1 day)
-            - dt (float): The length of the simulation step referred to 1 day (default is None).
             - Nsim (int, optional): The number of simulation runs to perform (default is 100).
             - quantiles (list of float, optional): A list of quantiles to compute for the simulation results (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
             - **kwargs: Additional arguments to pass to the stochastic simulation function.
@@ -211,39 +332,17 @@ class EpiModel:
             - simulated_compartments (list of np.ndarray): The results of the simulated compartments for each run.
             - df_quantiles (pd.DataFrame): A DataFrame containing the quantile values for each compartment, demographic group, and date.
         """
-        start_date, end_date = pd.to_datetime(start_date), pd.to_datetime(end_date)
-
-        if steps == "daily":
-            simulation_dates = pd.date_range(start=start_date, end=end_date, freq="d").tolist()
-        else: 
-            simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
-
-
-        # compute contact reductions
-        self.compute_contact_reductions(population, simulation_dates)
-
-        # simulation parameters 
-        parameters = {"population": population}
-        parameters.update(self.parameters)
-
-        # add initial conditions to parameters
-        for comp in kwargs: 
-            parameters[comp] = kwargs[comp]
         
-        parameters["epimodel"] = self
-
-        # simulation dt 
-        if dt is None:
-            parameters["dt"] = np.diff(simulation_dates)[0] / timedelta(days=1)
-        else: 
-            parameters["dt"] = dt
+        # compute the simulation dates 
+        simulation_dates = compute_simulation_dates(start_date, end_date, steps=steps)
 
         # simulate
         simulated_compartments = {}
         for i in range(Nsim): 
-            results = stochastic_simulation(parameters=parameters, post_processing_function=post_processing_function)
+            results = simulate(self, simulation_dates, post_processing_function=post_processing_function, ppfun_args=ppfun_args, **kwargs) 
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
+        # compute quantiles
         simulated_compartments = {k: np.array(v) for k, v in simulated_compartments.items()}
         df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles)
         
@@ -253,64 +352,45 @@ class EpiModel:
         simulation_results.set_df_quantiles(df_quantiles)
         simulation_results.set_full_trajectories(simulated_compartments)
         simulation_results.set_compartment_idx(self.compartments_idx)
-        simulation_results.set_parameters(parameters)
+        simulation_results.set_parameters(self.parameters)
 
         return simulation_results
     
 
-    def evaluate_transition(self, parameters): 
-        """
-        Evaluates the transition rate expressions for each compartment with the given parameters.
+def simulate(epimodel, 
+             simulation_dates, 
+             post_processing_function=lambda x: x, 
+             ppfun_args={}, 
+             **kwargs): 
 
-        Parameters:
-        -----------
-            parameters (dict): A dictionary containing the parameter values to substitute into the transition rate expressions.
+    # compute the contact reductions
+    epimodel.compute_contact_reductions(simulation_dates)
 
-        Returns:
-        --------
-            None: This method updates the transition rate expressions in place.
-        """   
-        parameters_to_eval = {k: v for k, v in parameters.items() if k in self.parameters.keys()}
-        for comp in self.compartments:
-            trans = self.transitions[comp]
-            new_trans = []
-            for tr in trans:
-                tr.rate_expression_eval = float(tr.rate_expression.subs(parameters_to_eval))
-                new_trans.append(tr)
-            self.transitions[comp] = new_trans
+    # check if some parameter need to be overwritten (prior)
+    for k in kwargs: 
+        if k in epimodel.parameters: 
+            epimodel.parameters[k] = kwargs[k]
 
+    # compute the definitions and overrides
+    epimodel.definitions = create_definitions(epimodel.parameters, len(simulation_dates))
+    epimodel.definitions = apply_overrides(epimodel.definitions, epimodel.overrides, simulation_dates)
+
+    # initialize population in different compartments and demographic groups
+    initial_conditions = apply_initial_conditions(epimodel, **kwargs)
+
+    # run 
+    compartments_evolution = stochastic_simulation(simulation_dates, epimodel, epimodel.definitions, initial_conditions)
+
+    # format simulation output
+    results = format_simulation_output(np.array(compartments_evolution)[1:], epimodel.compartments_idx, epimodel.population.Nk_names)
+
+    # apply post_processing 
+    results = post_processing_function(results, **ppfun_args)
     
-    def clear_interventions(self):
-        """
-        Clears the interventions list.
-        """
-        self.interventions = [] 
+    return results
 
 
-    def clear_transitions(self): 
-        """
-        Clears the transitions list.
-        """
-        self.transitions_list = []
-        self.transitions = {comp: [] for comp in self.compartments}
-
-
-    def clear_compartments(self): 
-        """
-        Clears the compartments list.
-        """
-        self.compartments = []
-        self.compartments_idx = {}
-
-
-    def clear_parameters(self):
-        """
-        Clears the parameters dictionary.
-        """
-        self.parameters = {}
-
-
-def stochastic_simulation(parameters, post_processing_function=lambda x, **kwargs: x): 
+def stochastic_simulation(simulation_dates, epimodel, parameters, initial_conditions): 
     """
     Run a stochastic simulation of the epidemic model over the specified time period.
 
@@ -329,20 +409,13 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
         - np.ndarray: A 3D array representing the evolution of compartment populations over time. The shape of the 
                     array is (time_steps, num_compartments, num_demographic_groups).
     """
-
-    epimodel = parameters["epimodel"]
-
-    # evaluate transitions on parameters
-    epimodel.evaluate_transition(parameters)
-        
-    # population in different compartments and demographic groups
-    compartments_population = np.zeros((len(epimodel.compartments), len(parameters["population"].Nk)), dtype='int')
-    for comp in epimodel.compartments:
-        compartments_population[epimodel.compartments_idx[comp]] = parameters[comp]
-    compartments_evolution = [compartments_population]     
+ 
+    compartments_evolution = [initial_conditions]
+    # compute dt simulation 
+    dt = np.diff(simulation_dates)[0] / timedelta(days=1)
 
     # simulate
-    for date in epimodel.Cs.keys():
+    for i, date in enumerate(simulation_dates):
 
         # get today contacts matrix and seasonality adjustment
         C = epimodel.Cs[date]["overall"]
@@ -354,20 +427,20 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
         for comp in epimodel.compartments:
             # transition (edge) attribute dict in 3-tuple (u, v, ddict) and initialize probabilities
             trans = epimodel.transitions[comp]
-            prob = np.zeros((len(epimodel.compartments), len(parameters["population"].Nk)), dtype='float')
+            prob = np.zeros((len(epimodel.compartments), len(epimodel.population.Nk)), dtype='float')
 
             for tr in trans:
                 # get source, target, and rate for this transition
                 source = epimodel.compartments_idx[tr.source]
                 target = epimodel.compartments_idx[tr.target]
-                rate = tr.rate_expression_eval
+                rate = evaluate(expr=tr.rate, env=parameters)[i]
 
                 # check if this transition has an interaction
                 if tr.agent is not None:
                     agent = epimodel.compartments_idx[tr.agent]  # get agent position
-                    interaction = np.array([np.sum(C[age, :] * pop[agent, :] / parameters["population"].Nk) for age in range(len(parameters["population"].Nk))])
+                    interaction = np.array([np.sum(C[age, :] * pop[agent, :] / epimodel.population.Nk) for age in range(len(epimodel.population.Nk))])
                     rate *= interaction        # interaction term
-                prob[target, :] += rate * parameters["dt"]
+                prob[target, :] += rate * dt
 
             # exponential of 
             prob = 1 - np.exp(-prob)
@@ -376,7 +449,7 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
             prob[source, :] = 1 - np.sum(prob, axis=0)
 
             # compute transitions
-            delta = np.array([multinomial(pop[source][i], prob[:, i]) for i in range(len(parameters["population"].Nk))])
+            delta = np.array([multinomial(pop[source][i], prob[:, i]) for i in range(len(epimodel.population.Nk))])
             delta[:, source] = 0
             changes = np.sum(delta)
 
@@ -392,9 +465,5 @@ def stochastic_simulation(parameters, post_processing_function=lambda x, **kwarg
 
         compartments_evolution.append(new_pop)
 
-    # format simulation output
-    results = format_simulation_output(np.array(compartments_evolution)[1:], parameters)
+    return compartments_evolution
 
-    # apply post_processing 
-    results = post_processing_function(results, **parameters)
-    return results
