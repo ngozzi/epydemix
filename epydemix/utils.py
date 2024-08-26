@@ -146,7 +146,6 @@ def apply_overrides(definitions, overrides, dates):
     --------
         - A dictionary with the same keys as definitions, but with values updated according to the overrides.
     """
-    
     for name, overrides in overrides.items():
         if name in definitions:
             values = definitions[name]
