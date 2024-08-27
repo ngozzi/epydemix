@@ -62,7 +62,7 @@ def perturbation_kernel(particle, continuous_params, discrete_params, cov_matrix
     return perturbed_particle
 
 
-def compute_covariance_matrix(particles, continuous_params):
+def compute_covariance_matrix(particles, continuous_params, weights=None, scaling_factor=1., apply_bandwidth=True):
     """
     Computes the covariance matrix for the continuous parameters in a list of particles.
 
@@ -81,6 +81,16 @@ def compute_covariance_matrix(particles, continuous_params):
         covariance_matrix = np.array([[np.var(data)]])
     else:
         covariance_matrix = np.cov(data, rowvar=False)
+
+    # Compute bandwidth factor
+    if apply_bandwidth:
+        if weights is None:
+            weights = np.ones(len(particles)) / len(particles)
+        bandwidth_factor = silverman_rule_of_thumb(compute_effective_sample_size(weights), len(continuous_params))
+        covariance_matrix *= bandwidth_factor**2
+
+    # Apply scaling factor
+    covariance_matrix *= scaling_factor
 
     return covariance_matrix
 
@@ -146,3 +156,10 @@ def compute_effective_sample_size(weights):
     """
     ess = 1 / np.sum(weights**2)
     return ess
+
+
+def silverman_rule_of_thumb(neff, d):
+    """
+    Silverman's rule of thumb.
+    """
+    return (4 / neff / (d + 2)) ** (1 / (d + 4))

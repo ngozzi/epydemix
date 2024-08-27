@@ -193,6 +193,8 @@ def calibration_abc_smc(model,
                  minimum_tolerance : float = 0.15, 
                  max_time : timedelta = None,
                  include_quantiles : bool = True, 
+                 scaling_factor : float = 1.0,
+                 apply_bandwidth : bool = True,
                  dates_column = "simulation_dates"): 
     
     start_time = datetime.now()
@@ -212,7 +214,7 @@ def calibration_abc_smc(model,
         start_generation_time = datetime.now()
 
         # compute covariance matrix
-        cov_matrix = compute_covariance_matrix(particles, continuous_params)
+        cov_matrix = compute_covariance_matrix(particles, continuous_params, weights, scaling_factor, apply_bandwidth)
         
         new_particles = []
         distances = []
