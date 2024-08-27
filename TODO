@@ -1,18 +1,13 @@
 ## Simulation 
-- preprocessing function (for custom initial conditions)
 - nowprocessing function (for custom operation during the simulation, such as variant introduction)
 - custom interaction term calculation 
 - rates that are arrays (different for each demographic, such as IFR)
 - parallelization
-- add_interventions: would it make sense to distinguish between functions for new_matrix and reduction_factor?
-
 
 ## Calibration 
 - single calibration function with switch?
 - implementation of the simple rejection algorithm 
 - model selection, needs to restructure CalibrationResults
-- ABC-SMC, model(p) must returns all simulated stuff
-- ABC-SMC, allow possiblity to resume runs (?)
 - compute_quantiles() may raise error with strange custom output, allow for the possibility to set it to False
 - additional functionalities for the top_perc approach: 
     - returns all the runs 
