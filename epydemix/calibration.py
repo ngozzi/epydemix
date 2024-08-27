@@ -9,7 +9,7 @@ import uuid
 import os 
 import tempfile
 from scipy import stats
-from .abc_smc_utils import initialize_particles, default_perturbation_kernel, compute_covariance_matrix, compute_weights, compute_effective_sample_size
+from .abc_smc_utils import initialize_particles, default_perturbation_kernel, compute_covariance_matrix, compute_weights, compute_effective_sample_size, weighted_quantile
 from multiprocess import Pool
 
 def calibration_top_perc(simulation_function, 
@@ -403,7 +403,8 @@ def calibration_abc_smc(model,
         particles = new_particles
 
         # Update tolerance for the next generation
-        tolerance = np.quantile(distances, tolerance_quantile)
+        #tolerance = np.quantile(distances, tolerance_quantile)
+        tolerance = weighted_quantile(distances, weights, tolerance_quantile)
 
         # Print generation information
         ESS = compute_effective_sample_size(weights)

@@ -163,3 +163,35 @@ def silverman_rule_of_thumb(neff, d):
     Silverman's rule of thumb.
     """
     return (4 / neff / (d + 2)) ** (1 / (d + 4))
+
+
+def weighted_quantile(values, weights, quantile):
+    """
+    Compute the weighted quantile of a dataset.
+
+    Parameters:
+    - values: array-like, the data values
+    - weights: array-like, the weights associated with the data values
+    - quantile: float, the quantile to compute (must be between 0 and 1)
+
+    Returns:
+    - The weighted quantile value
+    """
+    values = np.asarray(values)
+    weights = np.asarray(weights)
+    
+    # Ensure that weights sum to 1
+    weights /= np.sum(weights)
+
+    # Sort values and weights by values
+    sorted_indices = np.argsort(values)
+    sorted_values = values[sorted_indices]
+    sorted_weights = weights[sorted_indices]
+
+    # Compute the cumulative sum of weights
+    cumulative_weights = np.cumsum(sorted_weights)
+
+    # Find the index where the cumulative weight equals or exceeds the quantile
+    quantile_index = np.searchsorted(cumulative_weights, quantile)
+
+    return sorted_values[quantile_index]
