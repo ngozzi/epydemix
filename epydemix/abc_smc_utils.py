@@ -10,7 +10,7 @@ def initialize_particles(priors, num_particles):
     return particles, weights, tolerance
 
 
-def perturbation_kernel(particle, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition):
+def default_perturbation_kernel(particle, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition):
     """
     Perturbs a particle's parameters.
 
