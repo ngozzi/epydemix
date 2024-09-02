@@ -7,6 +7,7 @@ import pandas as pd
 from numpy.random import multinomial
 from datetime import timedelta
 from epydemix.population import Population
+import copy
 
 
 class EpiModel:
@@ -37,7 +38,6 @@ class EpiModel:
             self.population.add_contact_matrix(np.array([[1.]]))
             #self.population.add_population(np.array([50000, 50000]))
             self.population.add_population(np.array([100000]))
-
 
 
     def add_compartments(self, compartments): 
@@ -374,7 +374,7 @@ def simulate(epimodel,
             epimodel.parameters[k] = kwargs[k]
 
     # compute the definitions and overrides
-    epimodel.definitions = create_definitions(epimodel.parameters, len(simulation_dates))
+    epimodel.definitions = create_definitions(epimodel.parameters, len(simulation_dates), epimodel.population.Nk.shape[0])
     epimodel.definitions = apply_overrides(epimodel.definitions, epimodel.overrides, simulation_dates)
 
     # initialize population in different compartments and demographic groups
@@ -411,7 +411,6 @@ def stochastic_simulation(simulation_dates, epimodel, parameters, initial_condit
         - np.ndarray: A 3D array representing the evolution of compartment populations over time. The shape of the 
                     array is (time_steps, num_compartments, num_demographic_groups).
     """
- 
     compartments_evolution = [initial_conditions]
     # compute dt simulation 
     dt = np.diff(simulation_dates)[0] / timedelta(days=1)
@@ -435,7 +434,8 @@ def stochastic_simulation(simulation_dates, epimodel, parameters, initial_condit
                 # get source, target, and rate for this transition
                 source = epimodel.compartments_idx[tr.source]
                 target = epimodel.compartments_idx[tr.target]
-                rate = evaluate(expr=tr.rate, env=parameters)[i]
+                env_copy = copy.deepcopy(parameters)
+                rate = evaluate(expr=tr.rate, env=env_copy)[i]
 
                 # check if this transition has an interaction
                 if tr.agent is not None:
@@ -466,6 +466,6 @@ def stochastic_simulation(simulation_dates, epimodel, parameters, initial_condit
             new_pop += delta.T
 
         compartments_evolution.append(new_pop)
-
+    
     return compartments_evolution
 

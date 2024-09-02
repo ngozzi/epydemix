@@ -9,35 +9,92 @@ import os
 from epydemix.population import Population
 
 
-def create_definitions(parameters, T):
+def validate_parameter_shape(key, value, T, n_age):
     """
-    Generates a dictionary where each value is an array of length T based on the input dictionary.
+    Validates the shape of the input value based on its type and expected dimensions.
 
     Parameters:
     -----------
-        - parameters (dict): A dictionary where values can be either scalars (e.g., int, float) or iterables (e.g., list, tuple, range).
-        - T (int): The length of the arrays to be created in the output dictionary.
-
-    Returns:
-    --------
-    A dictionary where keys are the same as in `parameters` and values are arrays of length `T`.
-        - If the value in `parameters` is a scalar, the corresponding value in the output dictionary is an array with `T` repeated elements of that scalar.
-        - If the value in `parameters` is an iterable, the corresponding value in the output dictionary is an array of length `T` created by repeating the iterable as many times as needed and truncating the excess.
+        - key (str): The key associated with the value in the parameters dictionary.
+        - value (np.ndarray): The value to be validated.
+        - T (int): The expected length of the first dimension.
+        - n_age (int): The expected length of the second dimension.
 
     Raises:
     -------
     ValueError
-        If a value in `parameters` is neither a scalar nor an iterable.
+        If the value does not meet the required shape criteria.
+    """
+    if isinstance(value, (int, float)):
+        return  # Scalars don't need validation beyond their type
+
+    elif isinstance(value, Iterable):
+        value = np.array(value)
+
+        if value.ndim == 1:  # 1D array
+            if len(value) < T:
+                raise ValueError(f"The length of the 1D iterable for parameter '{key}' is smaller than simulation length ({T}).")
+        
+        elif value.ndim == 2:  # 2D array
+            if value.shape[0] != T and value.shape[0] != 1:
+                raise ValueError(f"The first dimension of the 2D iterable for parameter '{key}' must be 1 or match simulation length ({T}).")
+            if value.shape[1] != n_age:
+                raise ValueError(f"The second dimension of the 2D iterable for parameter '{key}' must match number of age groups ({n_age}).")
+        
+        else:
+            raise ValueError(f"Unsupported number of dimensions for parameter '{key}': {value.ndim}")
+        
+    else:
+            raise ValueError(f"Unsupported type for parameter '{key}': {type(value)}")
+
+
+def resize_parameter(value, T, n_age):
+    """
+    Resizes the input value to have the shape (T, n_age).
+
+    Parameters:
+    -----------
+        - value (np.ndarray or scalar): The value to be resized.
+        - T (int): The length of the first dimension.
+        - n_age (int): The length of the second dimension.
+
+    Returns:
+    --------
+        np.ndarray: A 2D array with shape (T, n_age).
+    """
+    if isinstance(value, (int, float)):  # Scalar value
+        return np.full((T, n_age), value)
+
+    value = np.array(value)
+
+    if value.ndim == 1:  # 1D array
+        return np.tile(value, (n_age, 1)).T
+
+    elif value.ndim == 2:  # 2D array
+        if value.shape[0] == 1:  # If the first dimension is 1, repeat it to match T
+            return np.tile(value, (T, 1))
+        return value
+    
+
+def create_definitions(parameters, T, n_age):
+    """
+    Generates a dictionary where each value is a 2D array based on the input dictionary and the parameters provided.
+
+    Parameters:
+    -----------
+        - parameters (dict): A dictionary where values can be either scalars or iterables.
+        - T (int): The length of the first dimension of the arrays to be created.
+        - n_age (int): The length of the second dimension of the arrays to be created.
+
+    Returns:
+    --------
+    A dictionary where keys are the same as in `parameters` and values are 2D arrays of shape `(T, n_age)`.
     """
     definitions = {}
     for key, value in parameters.items():
-        if isinstance(value, (int, float)):  # Check if the value is a scalar
-            definitions[key] = np.array([value] * T)
-        elif isinstance(value, (Iterable)):  # Check if the value is a list or tuple
-            extended_value = np.array((list(value) * ((T // len(value)) + 1))[:T])  # Repeat and truncate to length T
-            definitions[key] = extended_value
-        else:
-            raise ValueError(f"Unsupported type for key {key}: {type(value)}")
+        validate_parameter_shape(key, value, T, n_age)
+        definitions[key] = resize_parameter(value, T, n_age)
+    
     return definitions
 
 
@@ -154,6 +211,13 @@ def apply_overrides(definitions, overrides, dates):
                 end_date = str_to_date(override["end_date"])
                 override_value = override["value"]
 
+                # validate override value
+                T, n_age = sum(start_date <= d.date() <= end_date for d in dates), definitions[name].shape[1]
+                validate_parameter_shape(name, override_value, T=T, n_age=n_age)
+
+                # resize override value
+                override_value = resize_parameter(override_value, T=T, n_age=n_age)
+
                 for i, date in enumerate(dates):
                     if start_date <= date.date() <= end_date:
                         values[i] = override_value
@@ -239,3 +303,9 @@ def apply_initial_conditions(epimodel, **kwargs):
                 initial_conditions[epimodel.compartments_idx[comp]] = kwargs[comp]
 
     return initial_conditions
+
+
+def convert_to_2Darray(lst):
+    arr = np.array(lst)
+    arr = arr.reshape(1, len(lst))
+    return arr
