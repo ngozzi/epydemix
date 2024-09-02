@@ -8,6 +8,7 @@ from evalidate import Expr, base_eval_model
 import os 
 from epydemix.population import Population
 
+
 def validate_parameter_shape(key, value, T, n_age):
     """
     Validates the shape of the input value based on its type and expected dimensions.
@@ -73,7 +74,7 @@ def resize_parameter(value, T, n_age):
         if value.shape[0] == 1:  # If the first dimension is 1, repeat it to match T
             return np.tile(value, (T, 1))
         return value
-
+    
 
 def create_definitions(parameters, T, n_age):
     """
