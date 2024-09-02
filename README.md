@@ -1,5 +1,5 @@
-# Epydemix
-TT
+# Epydemix, the ABC of epidemics
+
 Epydemix is a python package for epidemic model implementation and calibration. 
 
 Tutorials: 

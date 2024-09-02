@@ -33,8 +33,11 @@ class EpiModel:
             self.population = load_population(population_name, path_to_data=population_data_path, layers=contact_layers)
         else: 
             self.population = Population(name=population_name)
-            self.population.add_contact_matrix(np.array([[0.5, 0.5], [0.5, 0.5]]))
-            self.population.add_population(np.array([50000, 50000]))
+            #self.population.add_contact_matrix(np.array([[0.5, 0.5], [0.5, 0.5]]))
+            self.population.add_contact_matrix(np.array([[1.]]))
+            #self.population.add_population(np.array([50000, 50000]))
+            self.population.add_population(np.array([100000]))
+
 
 
     def add_compartments(self, compartments): 
@@ -163,7 +166,6 @@ class EpiModel:
     def add_transition(self, source, target, rate, agent=None):
         """
         Adds a transition to the epidemic model.
-
         Parameters:
         -----------
             - source (str): The source compartment of the transition.
