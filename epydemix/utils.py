@@ -218,9 +218,10 @@ def apply_overrides(definitions, overrides, dates):
                 # resize override value
                 override_value = resize_parameter(override_value, T=T, n_age=n_age)
 
-                for i, date in enumerate(dates):
-                    if start_date <= date.date() <= end_date:
-                        values[i] = override_value
+                # override
+                override_idxs = [i for i, date in enumerate(dates) if start_date <= date.date() <= end_date]
+                values[override_idxs] = override_value
+
     return definitions
 
 
