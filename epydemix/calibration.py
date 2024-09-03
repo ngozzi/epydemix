@@ -450,6 +450,64 @@ def calibration_abc_smc(model,
     return results
 
 
+def calibration_abc_rejection(simulation_function, 
+                              priors, 
+                              parameters, 
+                              data,
+                              tolerance,
+                              error_metric=rmse,
+                              N_particles=100,
+                              include_quantiles=True, 
+                              dates_column="simulation_dates"): 
+            
+    simulation_params = parameters.copy()
+    accepted_params = {p: [] for p in priors.keys()}
+    accepted_errors, accepted_simulations = [], [], []
+
+    while len(accepted_errors) < N_particles:
+
+        # sample
+        sampled_params = {}
+        for param, distr in priors.items():
+            rv = distr.rvs()
+            sampled_params[param] = rv
+            simulation_params[param] = rv
+
+        # simulate
+        results = simulation_function(simulation_params)
+        error = error_metric(data=data, simulation=results)
+        
+        if error < tolerance: 
+            for p in accepted_params.keys(): 
+                accepted_params[p].append(sampled_params[p])
+            accepted_errors.append(error)
+            accepted_simulations.append(results)
+
+    # format simulation results
+    accepted_simulations_formatted = {}
+    for res in accepted_simulations:
+        accepted_simulations_formatted = combine_simulation_outputs(accepted_simulations_formatted, res)
+
+    # format results 
+    results = CalibrationResults()
+    results.set_calibration_strategy("abc_rejection")
+    results.set_posterior_distribution(pd.DataFrame(data=accepted_params))
+    results.set_selected_trajectories(np.array([el["data"] for el in accepted_simulations]))
+    results.set_data(data)
+    results.set_priors(priors)
+    results.set_calibration_params({"tolerance": tolerance, 
+                                    "error_metric": error_metric, 
+                                    "N_particles": N_particles})
+    results.set_error_distribution(np.array(accepted_errors))
+
+    if include_quantiles: 
+        # compute quantiles 
+        selected_simulations_quantiles = compute_quantiles(accepted_simulations_formatted, simulation_dates=simulation_params[dates_column])
+        results.set_selected_quantiles(selected_simulations_quantiles)
+
+    return results
+
+
 def run_projections(simulation_function, 
                     calibration_results, 
                     parameters, 
