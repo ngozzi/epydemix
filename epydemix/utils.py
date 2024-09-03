@@ -276,39 +276,6 @@ def evaluate(expr, env):
     return Expr(expr, model=eval_model).eval(env)
 
 
-def load_population(population_name, source=None, path_to_data=None, layers=["school", "work", "home", "community"]): 
-    population = Population(name=population_name)
-
-    # if path is None tries online import
-    if path_to_data is None:
-        path_to_data = "https://raw.githubusercontent.com/ngozzi/epydemix/main/epydemix_data/"
-    
-    # check location is supported
-    locations_list = pd.read_csv(os.path.join(path_to_data, "locations.csv"))["location"].values
-    if population_name not in locations_list:
-        raise ValueError(f"Location {population_name} not found in the list of supported locations. See {path_to_data}/locations.csv")
-
-    if source is None:
-        # identify the correct source of the contact matrices
-        contact_matrices_sources = pd.read_csv(os.path.join(path_to_data, "contact_matrices_sources.csv"))
-        source_location = contact_matrices_sources.loc[contact_matrices_sources.location == population_name, "source"]
-        source = source_location.iloc[0]
-
-    # load the contact matrices
-    for layer_name in layers:
-        # try to load the contact matrix
-        try:
-            C = pd.read_csv(os.path.join(path_to_data, population_name, "contact_matrices", source, f"contacts_matrix_{layer_name}.csv"), header=None).values
-        except: 
-            raise ValueError(f"Contact matrix for layer {layer_name} not found in {path_to_data}/{population_name}/contact_matrices/{source}/contacts_matrix_{layer_name}.csv. Source provided {source} may not be valid.")
-        
-        population.add_contact_matrix(C, layer_name=layer_name)
-
-    Nk = pd.read_csv(os.path.join(path_to_data, population_name, "demographic/age_distribution.csv"))
-    population.add_population(Nk=Nk["value"].values, Nk_names=Nk["group_name"].values)
-    return population
-
-
 def compute_simulation_dates(start_date, end_date, steps="daily"): 
     if steps == "daily":
         simulation_dates = pd.date_range(start=start_date, end=end_date, freq="d").tolist()
