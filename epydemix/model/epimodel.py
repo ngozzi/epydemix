@@ -60,10 +60,10 @@ class EpiModel:
                  age_group_mapping: Optional[Dict] = None, 
                  supported_contacts_sources: Optional[List] = None, 
                  use_default_population: bool = True,
-                 predefined_model: Optional[str] = None,  # New parameter for predefined model
-                 transmission_rate: float = 0.3,  # Defaults for SIR
-                 recovery_rate: float = 0.1  # Defaults for SIR
-                 ) -> None:
+                 predefined_model: Optional[str] = None,  
+                 transmission_rate: float = 0.3,  
+                 recovery_rate: float = 0.1,
+                 incubation_rate: float = 0.2) -> None:
             """
             Initializes the EpiModel instance.
 
@@ -108,8 +108,6 @@ class EpiModel:
             if parameters:
                 self.add_parameter(parameters_dict=parameters)
 
-            self.add_compartments(compartments)
-
             # Handle default contact sources if not provided
             if supported_contacts_sources is None:
                 supported_contacts_sources = ["prem_2017", "prem_2021", "mistry_2021"]
@@ -127,7 +125,7 @@ class EpiModel:
 
             # Load predefined model if specified
             if predefined_model is not None:
-                self.load_predefined_model(predefined_model, transmission_rate, recovery_rate)
+                self.load_predefined_model(predefined_model, transmission_rate, recovery_rate, incubation_rate)
             else:
                 self.add_compartments(compartments)  # Add custom compartments if no predefined model
 
