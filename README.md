@@ -19,7 +19,7 @@ You can install **Epydemix** locally for development using `pip`:
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your_username/epydemix.git
+   git clone https://github.com/ngozzi/epydemix.git
    ```
 
 2. Navigate to the project directory:
@@ -35,18 +35,8 @@ You can install **Epydemix** locally for development using `pip`:
    ```
 
 This will install the package and its dependencies, allowing you to make changes and immediately see the effects without needing to reinstall.
-
-### Requirements
-
 See [requirements.txt](https://github.com/ngozzi/epydemix/blob/main/requirements.txt)
-- Python 3.6 or higher
-- `numpy`
-- `pandas`
-- `matplotlib`
-- `multiprocess`
-- `scipy`
-- `seaborn`
-- `evalidate`
+
 
 ## Usage
 
@@ -75,6 +65,31 @@ results = model.run_simulations(start_date="2019-12-01", end_date="2020-04-01", 
 # Plot results 
 plot_quantiles(results, columns=["I_total", "S_total", "R_total"])
 ```
+
+## Epydemix Data
+
+**Epydemix** also provides access to a wealth of real-world population and contact matrix data through the **epydemix_data** module. This dataset allows you to load predefined population structures, including age distribution and contact matrices for over 400 locations globally. You can use this data to create realistic simulations of disease spread in different geographies.
+
+### Example of Loading Population Data
+
+```python
+from epydemix.population import load_population
+
+# Load population data for the United States with the Mistry 2021 contact matrix
+population = load_population(
+    population_name="United_States",
+    path_to_data="path/to/epydemix_data/United_States",
+    contacts_source="mistry_2021",
+    layers=["home", "work", "school", "community"]
+)
+
+# Use the loaded population in your epidemic model
+model.set_custom_population(population=population)
+```
+
+Epydemix can load data either locally from a folder or directly from online sources, making it easy to simulate a wide range of epidemic models on real population data.
+
+For more information about the available population data and contact matrices, please refer to the [locations.csv](https://github.com/ngozzi/epydemix/blob/main/epydemix_data/locations.csv) file, and see the [epydemix_data README](https://github.com/ngozzi/epydemix/blob/main/epydemix_data/README.md) for further details.
 
 
 ### Main Modules
