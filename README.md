@@ -50,18 +50,19 @@ See [requirements.txt](https://github.com/ngozzi/epydemix/blob/main/requirements
 
 ## Usage
 
-Once installed, you can start using **Epydemix** in your Python scripts or Jupyter notebooks. Below are some examples to get started.
+Once installed, you can start using **Epydemix** in your Python scripts or Jupyter notebooks. Below an example to get started.
 
-### Example 1: Creating a simple SIR model
+### Example: Creating and running a simple SIR model
 
 ```python
-from epydemix import EpiModel
+from epydemix import EpiModel 
+from epydemix.visualization import plot_quantiles
 
 # Create a new epidemic model
 model = EpiModel(compartments=["S", "I", "R"])
 
 # Define parameters
-model.add_parameter(name="beta", value=0.03)
+model.add_parameter(name="beta", value=0.3)
 model.add_parameter(name="mu", value=0.1)
 
 # Define transitions 
@@ -70,39 +71,11 @@ model.add_transition(source="I", target="R", rate="mu")
 
 # Run simulations specifying time frame and initial conditions
 results = model.run_simulations(start_date="2019-12-01", end_date="2020-04-01", S=99990, I=10)
+
+# Plot results 
+plot_quantiles(results, columns=["I_total", "S_total", "R_total"])
 ```
 
-### Example 2: Setting a Custom Population
-
-```python
-from epydemix.model.epimodel import EpiModel
-
-# Create a new model
-model = EpiModel()
-
-# Set a custom population using data from a file
-model.set_custom_population(
-    population_name="my_custom_population",
-    population_data_path="data/population_data.csv",
-    contact_layers=["school", "work", "community"]
-)
-
-# Run the simulation
-model.run_simulation()
-```
-
-### Example 3: Plotting Simulation Results
-
-```python
-from epydemix.visualization.plotting import plot_results
-
-# Assuming 'results' is the output from a simulation
-plot_results(results)
-```
-
-## Documentation
-
-For full documentation, including detailed guides on each module, visit the [Documentation](https://github.com/your_username/epydemix/wiki).
 
 ### Main Modules
 
