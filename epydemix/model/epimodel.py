@@ -1,5 +1,5 @@
 from .transition import Transition
-from ..utils.utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, compute_simulation_dates, apply_initial_conditions
+from ..utils.utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, compute_simulation_dates, apply_initial_conditions, create_default_initial_conditions
 from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
@@ -50,14 +50,18 @@ class EpiModel:
     """
 
     def __init__(self, 
-                compartments: Optional[List] = None, 
-                population_name: str = "epydemix_population", 
-                population_data_path: Optional[str] = None, 
-                contact_layers: Optional[List] = None, 
-                contacts_source: Optional[str] = None, 
-                age_group_mapping: Optional[Dict] = None, 
-                supported_contacts_sources: Optional[List] = None, 
-                use_default_population: bool = True) -> None:
+                 compartments: Optional[List] = None, 
+                 population_name: str = "epydemix_population", 
+                 population_data_path: Optional[str] = None, 
+                 contact_layers: Optional[List] = None, 
+                 contacts_source: Optional[str] = None, 
+                 age_group_mapping: Optional[Dict] = None, 
+                 supported_contacts_sources: Optional[List] = None, 
+                 use_default_population: bool = True,
+                 predefined_model: Optional[str] = None,  # New parameter for predefined model
+                 transmission_rate: float = 0.3,  # Defaults for SIR
+                 recovery_rate: float = 0.1  # Defaults for SIR
+                 ) -> None:
         """
         Initializes the EpiModel instance.
 
@@ -72,6 +76,9 @@ class EpiModel:
             supported_contacts_sources (list or None, optional): A list of supported contact data sources. Defaults to 
                 ["prem_2017", "prem_2021", "mistry_2021"] if None.
             use_default_population (bool, optional): If True, creates a default population; if False, tries to load the population from the provided path and population name. Defaults to True.
+            predefined_model (str, optional): Load a predefined model like "SIR", "SEIR", etc. Defaults to None.
+            transmission_rate (float, optional): Transmission rate for predefined models. Defaults to 0.3.
+            recovery_rate (float, optional): Recovery rate for predefined models. Defaults to 0.1.
 
         Returns:
             None
@@ -109,6 +116,12 @@ class EpiModel:
             supported_contacts_sources,
             use_default_population
         )
+
+        # Load predefined model if specified
+        if predefined_model is not None:
+            self.load_predefined_model(predefined_model, transmission_rate, recovery_rate)
+        else:
+            self.add_compartments(compartments)  # Add custom compartments if no predefined model
 
 
     def _load_or_create_population(self, 
@@ -151,6 +164,73 @@ class EpiModel:
                 age_group_mapping=age_group_mapping, 
                 supported_contacts_sources=supported_contacts_sources
             )
+        
+
+    def load_predefined_model(self, model_name: str, transmission_rate: float = 0.3, recovery_rate: float = 0.1, incubation_rate : float = 0.2) -> None:
+        """
+        Loads a predefined epidemic model (e.g., SIR, SEIR, SIS) with predefined compartments and transitions.
+
+        Args:
+            model_name (str): The name of the predefined model to load (e.g., "SIR").
+            transmission_rate (float, optional): The transmission rate for the SIR model. Default is 0.3.
+            recovery_rate (float, optional): The recovery rate for the SIR model. Default is 0.1.
+            incubation_rate (float, optional): The incubation rate for the SEIR model. Default is 0.2.
+        
+        Raises:
+            ValueError: If the model_name is not recognized.
+        """
+        if model_name.upper() == "SIR":
+            # SIR model setup
+            self.clear_compartments()
+            self.clear_transitions()
+
+            # Add SIR compartments
+            self.add_compartments(["Susceptible", "Infected", "Recovered"])
+
+            # Add parameters for SIR model
+            self.add_parameter(name="transmission_rate", value=transmission_rate)
+            self.add_parameter(name="recovery_rate", value=recovery_rate)
+
+            # Add transitions for SIR model
+            self.add_transition(source="Susceptible", target="Infected", rate="transmission_rate", agent="Infected")
+            self.add_transition(source="Infected", target="Recovered", rate="recovery_rate")
+
+        elif model_name.upper() == "SEIR":
+            # SEIR model setup (Susceptible, Exposed, Infected, Recovered)
+            self.clear_compartments()
+            self.clear_transitions()
+
+            # Add SEIR compartments
+            self.add_compartments(["Susceptible", "Exposed", "Infected", "Recovered"])
+
+            # Add parameters for SEIR model
+            self.add_parameter(name="transmission_rate", value=transmission_rate)
+            self.add_parameter(name="incubation_rate", value=incubation_rate)
+            self.add_parameter(name="recovery_rate", value=recovery_rate)
+
+            # Add transitions for SEIR model
+            self.add_transition(source="Susceptible", target="Exposed", rate="transmission_rate", agent="Infected")
+            self.add_transition(source="Exposed", target="Infected", rate="incubation_rate") 
+            self.add_transition(source="Infected", target="Recovered", rate="recovery_rate")
+
+        elif model_name.upper() == "SIS":
+            # SIS model setup (Susceptible, Infected)
+            self.clear_compartments()
+            self.clear_transitions()
+
+            # Add SIS compartments
+            self.add_compartments(["Susceptible", "Infected"])
+
+            # Add parameters for SIS model
+            self.add_parameter(name="transmission_rate", value=transmission_rate)
+            self.add_parameter(name="recovery_rate", value=recovery_rate)
+
+            # Add transitions for SIS model
+            self.add_transition(source="Susceptible", target="Infected", rate="transmission_rate", agent="Infected")
+            self.add_transition(source="Infected", target="Susceptible", rate="recovery_rate")
+
+        else:
+            raise ValueError(f"Unknown predefined model: {model_name}")
 
 
     def set_custom_population(self, 
@@ -524,6 +604,8 @@ class EpiModel:
                         quantiles: Optional[List[float]] = None, 
                         post_processing_function: Callable = lambda x: x, 
                         ppfun_args: Optional[Dict] = None, 
+                        initial_conditions: Optional[Dict[str, np.ndarray]] = None,
+                        percentage_in_agents: float = 0.01,  
                         **kwargs) -> SimulationResults:
         """
         Simulates the epidemic model over the given time period.
@@ -536,6 +618,10 @@ class EpiModel:
             quantiles (list of float, optional): A list of quantiles to compute for the simulation results (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
             post_processing_function (callable, optional): A function to apply to each simulation output for post-processing. Default is an identity function.
             ppfun_args (dict, optional): Arguments to pass to the post-processing function. Default is an empty dictionary.
+            initial_conditions (dict, optional): Initial population in each compartment. If None, 
+                initial conditions will be created based on the population and transitions.
+            percentage_in_agents (float, optional): Percentage of the population to place in agent compartments when 
+                creating default initial conditions. Default is 1%.
             **kwargs: Additional arguments to pass to the stochastic simulation function.
 
         Returns:
@@ -554,7 +640,8 @@ class EpiModel:
         # Perform the simulations
         simulated_compartments = {}
         for i in range(Nsim):
-            results = simulate(self, simulation_dates, post_processing_function=post_processing_function, ppfun_args=ppfun_args, **kwargs)
+            results = simulate(self, simulation_dates, post_processing_function=post_processing_function, ppfun_args=ppfun_args, 
+                               initial_conditions=initial_conditions, percentage_in_agents=percentage_in_agents, **kwargs)
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
         # Convert results to NumPy arrays and compute quantiles
@@ -576,6 +663,8 @@ def simulate(epimodel,
              simulation_dates: List[pd.Timestamp], 
              post_processing_function: Callable = lambda x: x, 
              ppfun_args: Optional[Dict] = None, 
+             initial_conditions: Optional[Dict[str, np.ndarray]] = None,
+             percentage_in_agents: float = 0.01,  
              **kwargs) -> Dict:
     """
     Runs a simulation of the epidemic model over the specified simulation dates.
@@ -586,6 +675,10 @@ def simulate(epimodel,
         post_processing_function (callable, optional): A function to apply to the results after the simulation. 
             Default is an identity function.
         ppfun_args (dict, optional): Arguments to pass to the post-processing function. Default is an empty dictionary.
+        initial_conditions (dict, optional): Initial population in each compartment. If None, 
+            initial conditions will be created based on the population and transitions.
+        percentage_in_agents (float, optional): Percentage of the population to place in agent compartments when 
+            creating default initial conditions. Default is 1%.
         **kwargs: Additional parameters to overwrite model parameters during the simulation.
 
     Returns:
@@ -608,10 +701,13 @@ def simulate(epimodel,
     epimodel.definitions = apply_overrides(epimodel.definitions, epimodel.overrides, simulation_dates)
 
     # Initialize population in different compartments and demographic groups
-    initial_conditions = apply_initial_conditions(epimodel, **kwargs)
+    #if initial_conditions is None:
+    #    initial_conditions = create_default_initial_conditions(epimodel, epimodel.population.Nk, percentage_in_agents)
+    #initial_conditions_arr = apply_initial_conditions(epimodel, initial_conditions)
+    initial_conditions_arr = apply_initial_conditions(epimodel, **kwargs)
 
     # Run the stochastic simulation
-    compartments_evolution = stochastic_simulation(simulation_dates, epimodel, epimodel.definitions, initial_conditions)
+    compartments_evolution = stochastic_simulation(simulation_dates, epimodel, epimodel.definitions, initial_conditions_arr)
 
     # Format the simulation output
     results = format_simulation_output(np.array(compartments_evolution)[1:], epimodel.compartments_idx, epimodel.population.Nk_names)

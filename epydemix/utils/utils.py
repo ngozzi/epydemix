@@ -5,7 +5,7 @@ import datetime
 import random
 import string
 from evalidate import Expr, base_eval_model
-from typing import Union, Dict, List, Any
+from typing import Union, Dict, List, Any, Optional
 
 
 def validate_parameter_shape(
@@ -363,6 +363,86 @@ def apply_initial_conditions(epimodel, **kwargs) -> np.ndarray:
 
     return initial_conditions
 
+def apply_initial_conditions_new(epimodel, initial_conditions: Dict[str, np.ndarray]) -> np.ndarray:
+    """
+    Applies initial conditions to the compartments of an epidemiological model.
+
+    Args:
+        epimodel (EpiModel): An instance of an epidemiological model containing compartments and population information.
+        initial_conditions (dict): Initial population in each compartment
+
+    Returns:
+        np.ndarray: A 2D array where rows correspond to compartments and columns correspond to demographic groups, 
+                    representing the initial conditions of the model. The shape of the array is 
+                    `(number_of_compartments, number_of_demographic_groups)`.
+    """
+    # initialize population in different compartments and demographic groups
+    initial_conditions_arr = np.zeros((len(epimodel.compartments), len(epimodel.population.Nk)), dtype='int')
+    for comp in epimodel.compartments:
+        if comp in initial_conditions: 
+            initial_conditions_arr[epimodel.compartments_idx[comp]] = initial_conditions[comp]
+
+    return initial_conditions_arr
+
+
+def create_default_initial_conditions(epimodel, population: List[int], percentage_in_agents: float = 0.01, initial_conditions: Optional[Dict] = None) -> Dict[str, np.ndarray]:
+    """
+    Creates custom initial conditions for the epidemic model. If initial conditions are not provided, 
+    assigns a percentage of the population to agent compartments and the rest to source compartments, 
+    considering different age groups.
+
+    Args:
+        epimodel (EpiModel): The epidemic model instance.
+        population (list of int): List representing the population size in each age group.
+        percentage_in_agents (float): Percentage of population to place in agent compartments. Defaults to 1%.
+        initial_conditions (dict, optional): A dictionary specifying initial conditions. If None, this function creates default conditions.
+
+    Returns:
+        dict: A dictionary with initial conditions for each compartment, with values as arrays representing different age groups.
+    """
+    # If initial conditions are provided, return them directly
+    if initial_conditions:
+        return initial_conditions
+    
+    # Initialize initial conditions dictionary
+    initial_conditions = {}
+
+    # Total population for each age group
+    total_population_per_age_group = np.array(population)
+
+    # Get compartments that are agents in transitions
+    agent_compartments = {tr.agent for tr in epimodel.transitions_list if tr.agent}
+    
+    # Get compartments that are sources in transitions with agents
+    source_compartments = {tr.source for tr in epimodel.transitions_list if tr.agent}
+
+    # Total number of agent compartments
+    num_agent_compartments = len(agent_compartments)
+
+    # Distribute population into agent compartments
+    if num_agent_compartments > 0:
+        population_in_agents_per_age_group = (total_population_per_age_group * percentage_in_agents).astype(int)
+        population_per_agent_per_age_group = population_in_agents_per_age_group // num_agent_compartments
+
+        for comp in agent_compartments:
+            initial_conditions[comp] = population_per_agent_per_age_group.copy()
+
+    # Assign the rest of the population to source compartments
+    remaining_population_per_age_group = total_population_per_age_group - np.sum(list(initial_conditions.values()), axis=0)
+    num_source_compartments = len(source_compartments)
+
+    if num_source_compartments > 0:
+        population_per_source_per_age_group = remaining_population_per_age_group // num_source_compartments
+
+        for comp in source_compartments:
+            initial_conditions[comp] = population_per_source_per_age_group.copy()
+
+    # If some compartments are missing, ensure they get zero population
+    for comp in epimodel.compartments:
+        if comp not in initial_conditions:
+            initial_conditions[comp] = np.zeros_like(total_population_per_age_group)
+
+    return initial_conditions
 
 
 def convert_to_2Darray(lst: List[Any]) -> np.ndarray:

@@ -1,6 +1,6 @@
 # epydemix/utils/__init__.py
 
-from .utils import compute_quantiles, compute_days, compute_simulation_dates, convert_to_2Darray
+from .utils import compute_quantiles, compute_days, compute_simulation_dates, convert_to_2Darray, create_default_initial_conditions
 from .abc_smc_utils import default_perturbation_kernel
 
 __all__ = [
@@ -9,4 +9,5 @@ __all__ = [
     'compute_simulation_dates',
     'convert_to_2Darray',
     'default_perturbation_kernel'
+    'create_default_initial_conditions'
 ]
