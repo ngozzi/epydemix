@@ -154,8 +154,8 @@ def validate_population_name(population_name, path_to_data):
     
 
 def get_primary_contacts_source(population_name, path_to_data):
-    contact_matrices_sources = pd.read_csv(os.path.join(path_to_data, "contact_matrices_sources.csv"))
-    source_location = contact_matrices_sources.loc[contact_matrices_sources.location == population_name, "primary_source"]
+    contact_matrices_sources = pd.read_csv(os.path.join(path_to_data, "locations.csv"))
+    source_location = contact_matrices_sources.loc[contact_matrices_sources.location == population_name, "primary_contact_source"]
     contacts_source = source_location.iloc[0]
     return contacts_source
 

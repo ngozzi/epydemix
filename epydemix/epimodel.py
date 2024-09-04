@@ -1,12 +1,12 @@
 # libraries
 from .transition import Transition
-from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, load_population, compute_simulation_dates, apply_initial_conditions
+from .utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, compute_simulation_dates, apply_initial_conditions
 from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
 from datetime import timedelta
-from epydemix.population import Population
+from epydemix.population import Population, load_population
 import copy
 
 
@@ -14,11 +14,29 @@ class EpiModel:
     """
     EpiModel Class
     """
+    def __init__(self, 
+                compartments=None, 
+                population_name="epydemix_population", 
+                population_data_path=None, 
+                contact_layers=None, 
+                contacts_source=None, 
+                age_group_mapping=None, 
+                supported_contacts_sources=None, 
+                use_default_population=True):
+        """
+        EpiModel constructor.
 
-    def __init__(self, compartments=[], population_name="epydemix_population", population_data_path=None, contact_layers=["school", "work", "home", "community"]):
+        Parameters:
+        - compartments (list): List of compartments for the model. If None, defaults to an empty list.
+        - population_name (str): Name of the population to load or create. Defaults to 'epydemix_population'.
+        - population_data_path (str or None): If provided, the population will be loaded from this path.
+        - contact_layers (list or None): Contact layers to load for the population. Defaults to ["school", "work", "home", "community"].
+        - contacts_source (str or None): Source of contacts data to load. If None, load_population will attempt to determine.
+        - age_group_mapping (dict or None): Mapping for age groups.
+        - supported_contacts_sources (list or None): List of supported contact data sources. Defaults to a standard list.
+        - use_default_population (bool): If True, creates a default population. If False, tries to load population.
         """
-        EpiModel constructor
-        """
+        # Initialize core attributes
         self.transitions = {}
         self.transitions_list = []
         self.interventions = []
@@ -27,15 +45,107 @@ class EpiModel:
         self.parameters = {}
         self.definitions = {}
         self.overrides = {}
-        self.add_compartments(compartments)
         self.Cs = {}
 
-        if population_data_path is not None: 
-            self.population = load_population(population_name, path_to_data=population_data_path, layers=contact_layers)
-        else: 
-            self.population = Population(name=population_name)
-            self.population.add_contact_matrix(np.array([[1.]]))
-            self.population.add_population(np.array([100000]))
+        # Handle default empty lists for compartments and contact layers
+        if compartments is None:
+            compartments = []
+        if contact_layers is None:
+            contact_layers = ["school", "work", "home", "community"]
+
+        self.add_compartments(compartments)
+
+        # Handle default contact sources if not provided
+        if supported_contacts_sources is None:
+            supported_contacts_sources = ["prem_2017", "prem_2021", "mistry_2021"]
+
+        # Load or create population based on use_default_population flag
+        self.population = self._load_or_create_population(
+            population_name,
+            population_data_path,
+            contact_layers,
+            contacts_source,
+            age_group_mapping,
+            supported_contacts_sources,
+            use_default_population
+        )
+
+
+    def _load_or_create_population(self, 
+                                population_name, 
+                                population_data_path, 
+                                contact_layers, 
+                                contacts_source, 
+                                age_group_mapping, 
+                                supported_contacts_sources,
+                                use_default_population):
+        """
+        Load a population from a file or create a default population.
+
+        Parameters:
+        - population_name (str): The name of the population.
+        - population_data_path (str or None): Path to the population data file.
+        - contact_layers (list): List of contact layers to use.
+        - contacts_source (str or None): Source of contact data. If None, load_population will auto-determine.
+        - age_group_mapping (dict or None): Mapping for age groups.
+        - supported_contacts_sources (list): List of supported contacts sources.
+        - use_default_population (bool): If True, creates a default population.
+
+        Returns:
+        - Population: A population object, either loaded from file or a default one.
+        """
+        if use_default_population:
+            # Create a default population manually
+            population = Population(name=population_name)
+            population.add_contact_matrix(np.array([[1.]]))  # Default contact matrix
+            population.add_population(np.array([100000]))    # Default population size
+            return population
+        else:
+            # Load population using load_population, which handles both online and local sources
+            return load_population(
+                population_name, 
+                contacts_source=contacts_source, 
+                path_to_data=population_data_path, 
+                layers=contact_layers, 
+                age_group_mapping=age_group_mapping, 
+                supported_contacts_sources=supported_contacts_sources
+            )
+
+
+    def set_custom_population(self, 
+                              population_name, 
+                              population_data_path=None, 
+                              contact_layers=None, 
+                              contacts_source=None, 
+                              age_group_mapping=None, 
+                              supported_contacts_sources=None):
+        """
+        Set or update the population for the model.
+
+        Parameters:
+        - population_data_path (str or None): If provided, the population will be loaded from this path.
+        - contact_layers (list or None): Contact layers to load for the population. Defaults to ["school", "work", "home", "community"].
+        - contacts_source (str or None): Source of contacts data to load. If None, load_population will attempt to determine.
+        - age_group_mapping (dict or None): Mapping for age groups.
+        - supported_contacts_sources (list or None): List of supported contact data sources. Defaults to a standard list.
+        """
+        # Handle default contact layers if not provided
+        if contact_layers is None:
+            contact_layers = ["school", "work", "home", "community"]
+
+        # Handle default contact sources if not provided
+        if supported_contacts_sources is None:
+            supported_contacts_sources = ["prem_2017", "prem_2021", "mistry_2021"]
+
+        # Load a new population using the same logic as in the constructor
+        self.population = load_population(
+            population_name, 
+            contacts_source=contacts_source, 
+            path_to_data=population_data_path, 
+            layers=contact_layers, 
+            age_group_mapping=age_group_mapping, 
+            supported_contacts_sources=supported_contacts_sources
+        )
 
 
     def add_compartments(self, compartments): 
