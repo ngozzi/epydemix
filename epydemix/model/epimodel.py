@@ -515,27 +515,89 @@ class EpiModel:
         for date in self.Cs:
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
 
+
+    def create_default_initial_conditions(self, percentage_in_agents: float = 0.01) -> Dict[str, np.ndarray]:
+        """
+        Creates default initial conditions for the epidemic model. If initial conditions are not provided, 
+        assigns a percentage of the population to agent compartments and the rest to source compartments, 
+        considering different age groups.
+
+        Args:
+            percentage_in_agents (float): Percentage of population to place in agent compartments. Defaults to 1%.
+            initial_conditions (dict, optional): A dictionary specifying initial conditions. If None, this function creates default conditions.
+
+        Returns:
+            dict: A dictionary with initial conditions for each compartment, with values as arrays representing different age groups.
+        """
+
+        population = self.population.Nk
+
+        # Initialize initial conditions dictionary
+        initial_conditions_dict = {}
+
+        # Total population for each age group
+        total_population_per_age_group = np.array(population)
+
+        # Get compartments that are agents in transitions
+        agent_compartments = {tr.agent for tr in self.transitions_list if tr.agent}
+        
+        # Get compartments that are sources in transitions with agents
+        source_compartments = {tr.source for tr in self.transitions_list if tr.agent}
+
+        # Total number of agent compartments
+        num_agent_compartments = len(agent_compartments)
+
+        # Distribute population into agent compartments
+        if num_agent_compartments > 0:
+            population_in_agents_per_age_group = (total_population_per_age_group * percentage_in_agents).astype(int)
+            population_per_agent_per_age_group = population_in_agents_per_age_group // num_agent_compartments
+
+            for comp in agent_compartments:
+                initial_conditions_dict[comp] = population_per_agent_per_age_group.copy()
+
+        # Assign the rest of the population to source compartments
+        remaining_population_per_age_group = total_population_per_age_group - np.sum(list(initial_conditions_dict.values()), axis=0)
+        num_source_compartments = len(source_compartments)
+
+        if num_source_compartments > 0:
+            population_per_source_per_age_group = remaining_population_per_age_group // num_source_compartments
+
+            for comp in source_compartments:
+                initial_conditions_dict[comp] = population_per_source_per_age_group.copy()
+
+        # If some compartments are missing, ensure they get zero population
+        for comp in self.compartments:
+            if comp not in initial_conditions_dict:
+                initial_conditions_dict[comp] = np.zeros_like(total_population_per_age_group)
+
+        return initial_conditions_dict
+
+
     
     def run_simulations(self, 
-                        start_date: Union[str, pd.Timestamp], 
-                        end_date: Union[str, pd.Timestamp], 
+                        start_date: Union[str, pd.Timestamp] = "2020-01-01", 
+                        end_date: Union[str, pd.Timestamp] = "2020-12-31", 
+                        initial_conditions_dict: Optional[Dict[str, np.ndarray]] = None,
                         steps: Union[int, str] = "daily", 
                         Nsim: int = 100, 
                         quantiles: Optional[List[float]] = None, 
                         post_processing_function: Callable = lambda x: x, 
                         ppfun_args: Optional[Dict] = None, 
+                        percentage_in_agents: float = 0.01,
                         **kwargs) -> SimulationResults:
         """
         Simulates the epidemic model over the given time period.
 
         Args:
-            start_date (str or pd.Timestamp): The start date of the simulation.
-            end_date (str or pd.Timestamp): The end date of the simulation.
+            start_date (str or pd.Timestamp): The start date of the simulation. Default is "2020-01-01".
+            end_date (str or pd.Timestamp): The end date of the simulation. Default is "2020-12-31".
+            initial_conditions_dict (dict, optional): A dictionary of initial conditions for the simulation.
             steps (int or str, optional): The number of time steps or step frequency (default is "daily").
             Nsim (int, optional): The number of simulation runs to perform (default is 100).
             quantiles (list of float, optional): A list of quantiles to compute for the simulation results (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
             post_processing_function (callable, optional): A function to apply to each simulation output for post-processing. Default is an identity function.
             ppfun_args (dict, optional): Arguments to pass to the post-processing function. Default is an empty dictionary.
+            percentage_in_agents (float, optional): The percentage of the population to initialize in the agents compartment. Default is 0.01.
             **kwargs: Additional arguments to pass to the stochastic simulation function.
 
         Returns:
@@ -551,10 +613,14 @@ class EpiModel:
         # Compute the simulation dates
         simulation_dates = compute_simulation_dates(start_date, end_date, steps=steps)
 
+        # Compute initial conditions if needed
+        if initial_conditions_dict is None:
+            initial_conditions_dict = self.create_default_initial_conditions(percentage_in_agents=percentage_in_agents)
+
         # Perform the simulations
         simulated_compartments = {}
         for i in range(Nsim):
-            results = simulate(self, simulation_dates, post_processing_function=post_processing_function, ppfun_args=ppfun_args, **kwargs)
+            results = simulate(self, simulation_dates, post_processing_function=post_processing_function, ppfun_args=ppfun_args,initial_conditions_dict=initial_conditions_dict, **kwargs)
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
         # Convert results to NumPy arrays and compute quantiles
@@ -574,6 +640,7 @@ class EpiModel:
     
 def simulate(epimodel, 
              simulation_dates: List[pd.Timestamp], 
+             initial_conditions_dict: Optional[Dict[str, np.ndarray]],
              post_processing_function: Callable = lambda x: x, 
              ppfun_args: Optional[Dict] = None, 
              **kwargs) -> Dict:
@@ -583,6 +650,7 @@ def simulate(epimodel,
     Args:
         epimodel (EpiModel): The epidemic model instance to simulate.
         simulation_dates (list of pd.Timestamp): The list of dates over which to run the simulation.
+        initial_conditions_dict (dict, optional): A dictionary of initial conditions for the simulation.
         post_processing_function (callable, optional): A function to apply to the results after the simulation. 
             Default is an identity function.
         ppfun_args (dict, optional): Arguments to pass to the post-processing function. Default is an empty dictionary.
@@ -608,7 +676,7 @@ def simulate(epimodel,
     epimodel.definitions = apply_overrides(epimodel.definitions, epimodel.overrides, simulation_dates)
 
     # Initialize population in different compartments and demographic groups
-    initial_conditions = apply_initial_conditions(epimodel, **kwargs)
+    initial_conditions = apply_initial_conditions(epimodel, initial_conditions_dict)
 
     # Run the stochastic simulation
     compartments_evolution = stochastic_simulation(simulation_dates, epimodel, epimodel.definitions, initial_conditions)
