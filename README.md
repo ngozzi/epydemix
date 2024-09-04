@@ -49,18 +49,12 @@ from epydemix import EpiModel
 from epydemix.visualization import plot_quantiles
 
 # Create a new epidemic model
-model = EpiModel(def)
+model = EpiModel(predefined_model="SIR")
 
-# Define parameters
-model.add_parameter(name="beta", value=0.3)
-model.add_parameter(name="mu", value=0.1)
-
-# Define transitions 
-model.add_transition(source="S", target="I", rate="beta", agent="I")
-model.add_transition(source="I", target="R", rate="mu")
-
-# Run simulations specifying time frame and initial conditions
-results = model.run_simulations(start_date="2019-12-01", end_date="2020-04-01", S=99990, I=10)
+# Run 100 stochastic simulations specifying time frame 
+results = model.run_simulations(start_date="2019-12-01", 
+                                end_date="2020-04-01",
+                                Nsim=100)
 
 # Plot results 
 plot_quantiles(results, columns=["I_total", "S_total", "R_total"])
