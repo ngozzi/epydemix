@@ -50,65 +50,145 @@ class EpiModel:
     """
 
     def __init__(self, 
-                compartments: Optional[List] = None, 
-                population_name: str = "epydemix_population", 
-                population_data_path: Optional[str] = None, 
-                contact_layers: Optional[List] = None, 
-                contacts_source: Optional[str] = None, 
-                age_group_mapping: Optional[Dict] = None, 
-                supported_contacts_sources: Optional[List] = None, 
-                use_default_population: bool = True) -> None:
+                    compartments: Optional[List] = None, 
+                    population_name: str = "epydemix_population", 
+                    population_data_path: Optional[str] = None, 
+                    contact_layers: Optional[List] = None, 
+                    contacts_source: Optional[str] = None, 
+                    age_group_mapping: Optional[Dict] = None, 
+                    supported_contacts_sources: Optional[List] = None, 
+                    use_default_population: bool = True,
+                    predefined_model: Optional[str] = None,  # New parameter for predefined model
+                    transmission_rate: float = 0.3,  # Defaults for SIR
+                    recovery_rate: float = 0.1  # Defaults for SIR
+                    ) -> None:
+            """
+            Initializes the EpiModel instance.
+
+            Args:
+                compartments (list, optional): A list of compartments for the model. Defaults to an empty list if None.
+                population_name (str, optional): The name of the population to load or create. Defaults to 'epydemix_population'.
+                population_data_path (str or None, optional): The path to the population data.
+                contact_layers (list or None, optional): A list of contact layers to load for the population. Defaults to 
+                    ["school", "work", "home", "community"] if None.
+                contacts_source (str or None, optional): The source of contact data. If None, the function will automatically detect the source.
+                age_group_mapping (dict or None, optional): A mapping of age groups for the population.
+                supported_contacts_sources (list or None, optional): A list of supported contact data sources. Defaults to 
+                    ["prem_2017", "prem_2021", "mistry_2021"] if None.
+                use_default_population (bool, optional): If True, creates a default population; if False, tries to load the population from the provided path and population name. Defaults to True.
+                predefined_model (str, optional): Load a predefined model like "SIR", "SEIR", etc. Defaults to None.
+                transmission_rate (float, optional): Transmission rate for predefined models. Defaults to 0.3.
+                recovery_rate (float, optional): Recovery rate for predefined models. Defaults to 0.1.
+
+            Returns:
+                None
+            """
+            # Initialize core attributes
+            self.transitions = {}
+            self.transitions_list = []
+            self.interventions = []
+            self.compartments = []
+            self.compartments_idx = {}
+            self.parameters = {}
+            self.definitions = {}
+            self.overrides = {}
+            self.Cs = {}
+
+            # Handle default empty lists for compartments and contact layers
+            if compartments is None:
+                compartments = []
+            if contact_layers is None:
+                contact_layers = ["school", "work", "home", "community"]
+
+            self.add_compartments(compartments)
+
+            # Handle default contact sources if not provided
+            if supported_contacts_sources is None:
+                supported_contacts_sources = ["prem_2017", "prem_2021", "mistry_2021"]
+
+            # Load or create population based on use_default_population flag
+            self.population = self._load_or_create_population(
+                population_name,
+                population_data_path,
+                contact_layers,
+                contacts_source,
+                age_group_mapping,
+                supported_contacts_sources,
+                use_default_population
+            )
+
+            # Load predefined model if specified
+            if predefined_model is not None:
+                self.load_predefined_model(predefined_model, transmission_rate, recovery_rate)
+            else:
+                self.add_compartments(compartments)  # Add custom compartments if no predefined model
+
+
+    def load_predefined_model(self, model_name: str, transmission_rate: float = 0.3, recovery_rate: float = 0.1, incubation_rate : float = 0.2) -> None:
         """
-        Initializes the EpiModel instance.
+        Loads a predefined epidemic model (e.g., SIR, SEIR, SIS) with predefined compartments and transitions.
 
         Args:
-            compartments (list, optional): A list of compartments for the model. Defaults to an empty list if None.
-            population_name (str, optional): The name of the population to load or create. Defaults to 'epydemix_population'.
-            population_data_path (str or None, optional): The path to the population data.
-            contact_layers (list or None, optional): A list of contact layers to load for the population. Defaults to 
-                ["school", "work", "home", "community"] if None.
-            contacts_source (str or None, optional): The source of contact data. If None, the function will automatically detect the source.
-            age_group_mapping (dict or None, optional): A mapping of age groups for the population.
-            supported_contacts_sources (list or None, optional): A list of supported contact data sources. Defaults to 
-                ["prem_2017", "prem_2021", "mistry_2021"] if None.
-            use_default_population (bool, optional): If True, creates a default population; if False, tries to load the population from the provided path and population name. Defaults to True.
-
-        Returns:
-            None
+            model_name (str): The name of the predefined model to load (e.g., "SIR").
+            transmission_rate (float, optional): The transmission rate for the SIR model. Default is 0.3.
+            recovery_rate (float, optional): The recovery rate for the SIR model. Default is 0.1.
+            incubation_rate (float, optional): The incubation rate for the SEIR model. Default is 0.2.
+        
+        Raises:
+            ValueError: If the model_name is not recognized.
         """
-        # Initialize core attributes
-        self.transitions = {}
-        self.transitions_list = []
-        self.interventions = []
-        self.compartments = []
-        self.compartments_idx = {}
-        self.parameters = {}
-        self.definitions = {}
-        self.overrides = {}
-        self.Cs = {}
+        if model_name.upper() == "SIR":
+            # SIR model setup
+            self.clear_compartments()
+            self.clear_transitions()
 
-        # Handle default empty lists for compartments and contact layers
-        if compartments is None:
-            compartments = []
-        if contact_layers is None:
-            contact_layers = ["school", "work", "home", "community"]
+            # Add SIR compartments
+            self.add_compartments(["Susceptible", "Infected", "Recovered"])
 
-        self.add_compartments(compartments)
+            # Add parameters for SIR model
+            self.add_parameter(name="transmission_rate", value=transmission_rate)
+            self.add_parameter(name="recovery_rate", value=recovery_rate)
 
-        # Handle default contact sources if not provided
-        if supported_contacts_sources is None:
-            supported_contacts_sources = ["prem_2017", "prem_2021", "mistry_2021"]
+            # Add transitions for SIR model
+            self.add_transition(source="Susceptible", target="Infected", rate="transmission_rate", agent="Infected")
+            self.add_transition(source="Infected", target="Recovered", rate="recovery_rate")
 
-        # Load or create population based on use_default_population flag
-        self.population = self._load_or_create_population(
-            population_name,
-            population_data_path,
-            contact_layers,
-            contacts_source,
-            age_group_mapping,
-            supported_contacts_sources,
-            use_default_population
-        )
+        elif model_name.upper() == "SEIR":
+            # SEIR model setup (Susceptible, Exposed, Infected, Recovered)
+            self.clear_compartments()
+            self.clear_transitions()
+
+            # Add SEIR compartments
+            self.add_compartments(["Susceptible", "Exposed", "Infected", "Recovered"])
+
+            # Add parameters for SEIR model
+            self.add_parameter(name="transmission_rate", value=transmission_rate)
+            self.add_parameter(name="incubation_rate", value=incubation_rate)
+            self.add_parameter(name="recovery_rate", value=recovery_rate)
+
+            # Add transitions for SEIR model
+            self.add_transition(source="Susceptible", target="Exposed", rate="transmission_rate", agent="Infected")
+            self.add_transition(source="Exposed", target="Infected", rate="incubation_rate") 
+            self.add_transition(source="Infected", target="Recovered", rate="recovery_rate")
+
+        elif model_name.upper() == "SIS":
+            # SIS model setup (Susceptible, Infected)
+            self.clear_compartments()
+            self.clear_transitions()
+
+            # Add SIS compartments
+            self.add_compartments(["Susceptible", "Infected"])
+
+            # Add parameters for SIS model
+            self.add_parameter(name="transmission_rate", value=transmission_rate)
+            self.add_parameter(name="recovery_rate", value=recovery_rate)
+
+            # Add transitions for SIS model
+            self.add_transition(source="Susceptible", target="Infected", rate="transmission_rate", agent="Infected")
+            self.add_transition(source="Infected", target="Susceptible", rate="recovery_rate")
+
+        else:
+            raise ValueError(f"Unknown predefined model: {model_name}")
 
 
     def _load_or_create_population(self, 

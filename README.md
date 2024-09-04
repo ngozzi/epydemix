@@ -49,7 +49,7 @@ from epydemix import EpiModel
 from epydemix.visualization import plot_quantiles
 
 # Create a new epidemic model
-model = EpiModel(compartments=["S", "I", "R"])
+model = EpiModel(def)
 
 # Define parameters
 model.add_parameter(name="beta", value=0.3)
