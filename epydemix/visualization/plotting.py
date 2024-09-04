@@ -1,47 +1,59 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+import pandas as pd
+from typing import List, Optional, Union, Any
 
 
-def get_timeseries_data(df_quantiles, column, quantile): 
+
+def get_timeseries_data(df_quantiles: pd.DataFrame, 
+                        column: str, 
+                        quantile: float) -> pd.DataFrame:
     """
-    Extracts the time series data for a specific compartment, demographic group, and quantile.
+    Extracts the time series data for a specific column (compartment or demographic group) and quantile.
 
-    Parameters:
-    -----------
-        - df_quantiles (pd.DataFrame): DataFrame containing quantile data for compartments and demographic groups.
-        - column (str): The name of the column to extract data for.
-        - quantile (float): The quantile to extract data for.
+    Args:
+        df_quantiles (pd.DataFrame): DataFrame containing quantile data for compartments and demographic groups.
+        column (str): The name of the column to extract data for.
+        quantile (float): The quantile to extract data for.
 
     Returns:
-    --------
-        - pd.DataFrame: A DataFrame containing the time series data for the specified compartment, demographic group, and quantile.
+        pd.DataFrame: A DataFrame containing the time series data for the specified column and quantile.
     """
     return df_quantiles.loc[(df_quantiles["quantile"] == quantile)][["date", column]]
 
 
-def plot_quantiles(results, columns, ax=None,
-                   lower_q=0.05, upper_q=0.95, show_median=True, 
-                   ci_alpha=0.3, title="", show_legend=True, 
-                   palette="Set2", colors=None, labels=None):
+def plot_quantiles(results: Any, 
+                   columns: Union[List[str], str], 
+                   ax: Optional[plt.Axes] = None,
+                   lower_q: float = 0.05, 
+                   upper_q: float = 0.95, 
+                   show_median: bool = True, 
+                   ci_alpha: float = 0.3, 
+                   title: str = "", 
+                   show_legend: bool = True, 
+                   palette: str = "Set2", 
+                   colors: Optional[Union[List[str], str]] = None, 
+                   labels: Optional[Union[List[str], str]] = None) -> None:
     """
     Plots the quantiles for a specific compartment and demographic group over time.
 
-    Parameters:
-    -----------
-        - results (SimulationResults): An object containing the simulation results
-        - compartment (list or str): The names of the compartment to plot data for.
-        - demographic_group (list or str or int): The demographic groups to plot data for.
-        - ax (matplotlib.axes.Axes, optional): The axes to plot on. If None, a new figure and axes are created.
-        - lower_q (float, optional): The lower quantile to plot (default is 0.05).
-        - upper_q (float, optional): The upper quantile to plot (default is 0.95).
-        - show_median (bool, optional): Whether to show the median (default is True).
-        - ci_alpha (float, optional): The alpha value for the confidence interval shading (default is 0.3).
-        - label (str, optional): The label for the median line (default is "").
-        - title (str, optional): The title of the plot (default is "").
-        - show_legend (bool, optional): Whether to show legend (default is True).
-        - palette (str, optional): The color palette for the plot (default is "Set2")
-        - colors (list or str, optional): The colors to use for the plot (default is None).
+    Args:
+        results (Any): An object containing the simulation results with a `get_df_quantiles` method.
+        columns (Union[List[str], str]): The names of the columns to plot data for.
+        ax (Optional[plt.Axes], optional): The axes to plot on. If None, a new figure and axes are created (default is None).
+        lower_q (float, optional): The lower quantile to plot (default is 0.05).
+        upper_q (float, optional): The upper quantile to plot (default is 0.95).
+        show_median (bool, optional): Whether to show the median (default is True).
+        ci_alpha (float, optional): The alpha value for the confidence interval shading (default is 0.3).
+        title (str, optional): The title of the plot (default is an empty string).
+        show_legend (bool, optional): Whether to show the legend (default is True).
+        palette (str, optional): The color palette for the plot (default is "Set2").
+        colors (Optional[Union[List[str], str]], optional): The colors to use for the plot. If None, colors from the palette are used (default is None).
+        labels (Optional[Union[List[str], str]], optional): Labels for the lines. If None, column names are used (default is None).
+    
+    Returns:
+        None
     """
     
     df_quantiles = results.get_df_quantiles()
@@ -84,31 +96,36 @@ def plot_quantiles(results, columns, ax=None,
         ax.legend(loc="upper left", frameon=False)
 
 
-def plot_selected_quantiles(calibration_results, ax=None, show_data=True, columns="data", 
-                               lower_q=0.05, upper_q=0.95, show_median=True, 
-                               ci_alpha=0.3, title="", show_legend=True, ylabel="", 
-                               palette="Set2"):
-    
+def plot_selected_quantiles(calibration_results: Any, 
+                            ax: Optional[plt.Axes] = None, 
+                            show_data: bool = True, 
+                            columns: Union[str, List[str]] = "data", 
+                            lower_q: float = 0.05, 
+                            upper_q: float = 0.95, 
+                            show_median: bool = True, 
+                            ci_alpha: float = 0.3, 
+                            title: str = "", 
+                            show_legend: bool = True, 
+                            ylabel: str = "", 
+                            palette: str = "Set2") -> None:
     """
     Plots the selected quantiles from the calibration results.
 
-    Parameters:
-    -----------
-        calibration_results (CalibrationResults): An object containing the calibration results, including selected quantiles and observed data.
-        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+    Args:
+        calibration_results (Any): An object containing the calibration results, including selected quantiles and observed data.
+        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
         show_data (bool, optional): Whether to show the observed data points (default is True).
-        columns (str or list of str, optional): The columns to plot from the quantiles data (default is "data").
+        columns (Union[str, List[str]], optional): The columns to plot from the quantiles data (default is "data").
         lower_q (float, optional): The lower quantile to plot (default is 0.05).
         upper_q (float, optional): The upper quantile to plot (default is 0.95).
         show_median (bool, optional): Whether to show the median line (default is True).
         ci_alpha (float, optional): The alpha value for the confidence interval shading (default is 0.3).
-        title (str, optional): The title of the plot (default is "").
+        title (str, optional): The title of the plot (default is an empty string).
         show_legend (bool, optional): Whether to show the legend (default is True).
-        ylabel (str, optional): The label for the y-axis (default is "").
+        ylabel (str, optional): The label for the y-axis (default is an empty string).
         palette (str, optional): The color palette to use for the plot (default is "Set2").
 
     Returns:
-    --------
         None: This function does not return any values; it produces a plot.
     """
     
@@ -150,24 +167,30 @@ def plot_selected_quantiles(calibration_results, ax=None, show_data=True, column
         ax.legend(pleg + [p_actual], handles + ["actual"], loc="upper left", frameon=False)
 
 
-def plot_posterior(calibration_results, parameter, ax=None, xlabel=None, kind="hist", color="dodgerblue", ylabel="", prior_range=False, **kwargs): 
+def plot_posterior(calibration_results: Any, 
+                   parameter: str, 
+                   ax: Optional[plt.Axes] = None, 
+                   xlabel: Optional[str] = None, 
+                   kind: str = "hist", 
+                   color: str = "dodgerblue", 
+                   ylabel: str = "", 
+                   prior_range: bool = False, 
+                   **kwargs) -> None:
     """
     Plots the posterior distribution of a given parameter from the calibration results.
 
-    Parameters:
-    -----------
-        calibration_results (CalibrationResults): An object containing the calibration results, including the posterior distribution.
+    Args:
+        calibration_results (Any): An object containing the calibration results, including the posterior distribution.
         parameter (str): The parameter to plot from the posterior distribution.
-        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        xlabel (str, optional): The label for the x-axis (default is None).
+        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        xlabel (Optional[str], optional): The label for the x-axis (default is None).
         kind (str, optional): The type of plot to generate; options are "hist" for histogram, "kde" for kernel density estimate, and "ecdf" for empirical cumulative distribution function (default is "hist").
         color (str, optional): The color to use for the plot (default is "dodgerblue").
-        ylabel (str, optional): The label for the y-axis (default is "").
+        ylabel (str, optional): The label for the y-axis (default is an empty string).
         prior_range (bool, optional): Whether to set the x-axis limits to the range of the prior distribution (default is False).
         **kwargs: Additional keyword arguments to pass to the seaborn plotting function.
 
     Returns:
-    --------
         None: This function does not return any values; it produces a plot.
     """
         
@@ -197,25 +220,32 @@ def plot_posterior(calibration_results, parameter, ax=None, xlabel=None, kind="h
         ax.set_xlim(xmin, xmax)
 
 
-def plot_posterior_2d(calibration_results, parameter_x, parameter_y, ax=None, xlabel=None, ylabel=None, kind="hist", palette="Blues", prior_range=False, **kwargs): 
+def plot_posterior_2d(calibration_results: Any, 
+                      parameter_x: str, 
+                      parameter_y: str, 
+                      ax: Optional[plt.Axes] = None, 
+                      xlabel: Optional[str] = None, 
+                      ylabel: Optional[str] = None, 
+                      kind: str = "hist", 
+                      palette: str = "Blues", 
+                      prior_range: bool = False, 
+                      **kwargs) -> None:
     """
     Plots the 2D posterior distribution of two given parameters from the calibration results.
 
-    Parameters:
-    -----------
-        calibration_results (CalibrationResults): An object containing the calibration results, including the posterior distribution.
+    Args:
+        calibration_results (Any): An object containing the calibration results, including the posterior distribution.
         parameter_x (str): The parameter to plot on the x-axis from the posterior distribution.
         parameter_y (str): The parameter to plot on the y-axis from the posterior distribution.
-        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        xlabel (str, optional): The label for the x-axis (default is None).
-        ylabel (str, optional): The label for the y-axis (default is None).
+        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        xlabel (Optional[str], optional): The label for the x-axis (default is None).
+        ylabel (Optional[str], optional): The label for the y-axis (default is None).
         kind (str, optional): The type of plot to generate; options are "hist" for histogram and "kde" for kernel density estimate (default is "hist").
         palette (str, optional): The color palette to use for the plot (default is "Blues").
         prior_range (bool, optional): Whether to set the axis limits to the ranges of the prior distributions (default is False).
         **kwargs: Additional keyword arguments to pass to the seaborn plotting function.
 
     Returns:
-    --------
         None: This function does not return any values; it produces a plot.
     """
         
@@ -256,23 +286,30 @@ def plot_selected_trajectories(calibration_results, ax=None, show_data=True, col
     return 0
 
 
-def plot_contact_matrix(population, layer_name, ax=None, title=None, show_colorbar=True, cmap="rocket_r", vmin=None, vmax=None, labelsize=10): 
+def plot_contact_matrix(population: Any, 
+                        layer_name: str, 
+                        ax: Optional[plt.Axes] = None, 
+                        title: Optional[str] = None, 
+                        show_colorbar: bool = True, 
+                        cmap: str = "rocket_r", 
+                        vmin: Optional[float] = None, 
+                        vmax: Optional[float] = None, 
+                        labelsize: int = 10) -> None:
     """
     Plots the contact matrix for a given population layer.
 
-    Parameters:
-    -----------
-        population (Population): An object containing population data, including contact matrices.
+    Args:
+        population (Any): An object containing population data, including contact matrices.
         layer_name (str): The name of the contact matrix layer to plot.
-        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        title (str, optional): The title of the plot (default is None, which uses the layer name as the title).
+        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        title (Optional[str], optional): The title of the plot (default is None, which uses the layer name as the title).
         show_colorbar (bool, optional): Whether to display the colorbar (default is True).
         cmap (str, optional): The colormap to use for the plot (default is "rocket_r").
-        vmin (float, optional): The minimum value for the color scale (default is None, which uses the minimum value in the contact matrix).
-        vmax (float, optional): The maximum value for the color scale (default is None, which uses the maximum value in the contact matrix).
+        vmin (Optional[float], optional): The minimum value for the color scale (default is None, which uses the minimum value in the contact matrix).
+        vmax (Optional[float], optional): The maximum value for the color scale (default is None, which uses the maximum value in the contact matrix).
+        labelsize (int, optional): The font size for axis tick labels (default is 10).
 
     Returns:
-    --------
         None: This function does not return any values; it produces a plot.
     """
 
@@ -300,20 +337,22 @@ def plot_contact_matrix(population, layer_name, ax=None, title=None, show_colorb
         ax.set_title(title)
 
 
-def plot_population(population, ax=None, title="", color="dodgerblue", show_perc=False):
+def plot_population(population: Any, 
+                    ax: Optional[plt.Axes] = None, 
+                    title: str = "", 
+                    color: str = "dodgerblue", 
+                    show_perc: bool = False) -> None:
     """
     Plots the population distribution across demographic groups.
 
-    Parameters:
-    -----------
-        population (Population): An object containing population data, including demographic group names and sizes.
-        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        title (str, optional): The title of the plot (default is "").
+    Args:
+        population (Any): An object containing population data, including demographic group names and sizes (`Nk_names` and `Nk`).
+        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        title (str, optional): The title of the plot (default is an empty string).
         color (str, optional): The color to use for the bars in the plot (default is "dodgerblue").
         show_perc (bool, optional): Whether to show the population as a percentage of the total (default is False).
 
     Returns:
-    --------
         None: This function does not return any values; it produces a plot.
     """
     if ax is None:
@@ -332,32 +371,33 @@ def plot_population(population, ax=None, title="", color="dodgerblue", show_perc
     ax.set_title(title)
 
 
-def plot_spectral_radius(epimodel, ax=None, title="", color="dodgerblue", normalize=False, show_perc=True, layer="overall", 
-                         show_interventions=True, interventions_palette="Set2", interventions_colors=None): 
+def plot_spectral_radius(epimodel: Any, 
+                         ax: Optional[plt.Axes] = None, 
+                         title: str = "", 
+                         color: str = "dodgerblue", 
+                         normalize: bool = False, 
+                         show_perc: bool = True, 
+                         layer: str = "overall", 
+                         show_interventions: bool = True, 
+                         interventions_palette: str = "Set2", 
+                         interventions_colors: Optional[List[str]] = None) -> None:
     """
     Plots the spectral radius of the contact matrices over time.
 
-    Parameters:
-    - epimodel: The EpiModel object containing the contact matrices.
-    - ax: Optional. The matplotlib Axes object to plot on. If not provided, a new figure and axes will be created.
-    - title: Optional. The title of the plot.
-    - color: Optional. The color of the plot line.
-    - normalize: Optional. Whether to normalize the spectral radius by the initial value.
-    - show_perc: Optional. Whether to show the percentage change in the spectral radius.
-    - layer: Optional. The layer of the contact matrix to plot.
-    - show_interventions: Optional. Whether to show the interventions on the plot.
-    - interventions_palette: Optional. The seaborn color palette to use for the interventions.
-    - interventions_colors: Optional. The color of the interventions. If not provided, the palette will be used.
+    Args:
+        epimodel (Any): The EpiModel object containing the contact matrices and interventions.
+        ax (Optional[plt.Axes], optional): The matplotlib Axes object to plot on. If not provided, a new figure and axes will be created.
+        title (str, optional): The title of the plot (default is an empty string).
+        color (str, optional): The color of the plot line (default is "dodgerblue").
+        normalize (bool, optional): Whether to normalize the spectral radius by the initial value (default is False).
+        show_perc (bool, optional): Whether to show the percentage change in the spectral radius (default is True).
+        layer (str, optional): The layer of the contact matrix to plot (default is "overall").
+        show_interventions (bool, optional): Whether to show the interventions on the plot (default is True).
+        interventions_palette (str, optional): The seaborn color palette to use for the interventions (default is "Set2").
+        interventions_colors (Optional[List[str]], optional): A list of colors to use for the interventions. If not provided, the palette will be used (default is None).
 
     Returns:
-    - None
-
-    Raises:
-    - None
-
-    Notes:
-    - This function requires the EpiModel object to have the contact matrices defined.
-
+        None: This function does not return any values; it produces a plot.
     """
 
     if ax is None:
@@ -406,37 +446,39 @@ def plot_spectral_radius(epimodel, ax=None, title="", color="dodgerblue", normal
         ax.legend(loc="upper right")
   
     
-def compute_spectral_radius(m): 
+def compute_spectral_radius(m: np.ndarray) -> float:
     """
-    Computes the spectral radius of a matrix.
+    Computes the spectral radius of a matrix, which is the largest absolute value of its eigenvalues.
 
-    Parameters:
-    -----------
-        m (np.array): The matrix to compute the spectral radius for.
+    Args:
+        m (np.ndarray): The matrix to compute the spectral radius for.
 
     Returns:
-    --------
         float: The spectral radius of the matrix.
     """
     return np.max(np.abs(np.linalg.eigvals(m)))
     
 
-def plot_error_distribution(calibration_results, ax=None, xlabel=None, kind="hist", color="dodgerblue", ylabel="", **kwargs): 
+def plot_error_distribution(calibration_results: Any, 
+                            ax: Optional[plt.Axes] = None, 
+                            xlabel: Optional[str] = None, 
+                            kind: str = "hist", 
+                            color: str = "dodgerblue", 
+                            ylabel: str = "", 
+                            **kwargs) -> None:
     """
     Plots the error distribution from the calibration results.
 
-    Parameters:
-    -----------
-        calibration_results (CalibrationResults): An object containing the calibration results, including the posterior distribution.
-        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        xlabel (str, optional): The label for the x-axis (default is None).
+    Args:
+        calibration_results (Any): An object containing the calibration results, including the error distribution.
+        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+        xlabel (Optional[str], optional): The label for the x-axis (default is None).
         kind (str, optional): The type of plot to generate; options are "hist" for histogram, "kde" for kernel density estimate, and "ecdf" for empirical cumulative distribution function (default is "hist").
         color (str, optional): The color to use for the plot (default is "dodgerblue").
-        ylabel (str, optional): The label for the y-axis (default is "").
+        ylabel (str, optional): The label for the y-axis (default is an empty string).
         **kwargs: Additional keyword arguments to pass to the seaborn plotting function.
 
     Returns:
-    --------
         None: This function does not return any values; it produces a plot.
     """
         
@@ -462,31 +504,38 @@ def plot_error_distribution(calibration_results, ax=None, xlabel=None, kind="his
     ax.grid(axis="y", linestyle="--", linewidth=0.3)
 
 
-def plot_projections(projections, calibration_results, ax=None, show_data=True, columns="data", 
-                     lower_q=0.05, upper_q=0.95, show_median=True, 
-                     ci_alpha=0.3, title="", show_legend=True, ylabel="", 
-                     palette="Set2"):
-
+def plot_projections(projections: Any, 
+                     calibration_results: Any, 
+                     ax: Optional[plt.Axes] = None, 
+                     show_data: bool = True, 
+                     columns: Union[str, List[str]] = "data", 
+                     lower_q: float = 0.05, 
+                     upper_q: float = 0.95, 
+                     show_median: bool = True, 
+                     ci_alpha: float = 0.3, 
+                     title: str = "", 
+                     show_legend: bool = True, 
+                     ylabel: str = "", 
+                     palette: str = "Set2") -> None:
     """
-    Plots the selected quantiles from the calibration results.
+    Plots the projections along with the selected quantiles from the calibration results.
 
-    Parameters:
-    -----------
-        calibration_results (CalibrationResults): An object containing the calibration results, including selected quantiles and observed data.
-        ax (matplotlib.axes._subplots.AxesSubplot, optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
+    Args:
+        projections (Any): The projection data, typically containing the simulated results with quantiles.
+        calibration_results (Any): An object containing the calibration results, including selected quantiles and observed data.
+        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
         show_data (bool, optional): Whether to show the observed data points (default is True).
-        columns (str or list of str, optional): The columns to plot from the quantiles data (default is "data").
+        columns (Union[str, List[str]], optional): The columns to plot from the quantiles data (default is "data").
         lower_q (float, optional): The lower quantile to plot (default is 0.05).
         upper_q (float, optional): The upper quantile to plot (default is 0.95).
         show_median (bool, optional): Whether to show the median line (default is True).
         ci_alpha (float, optional): The alpha value for the confidence interval shading (default is 0.3).
-        title (str, optional): The title of the plot (default is "").
+        title (str, optional): The title of the plot (default is an empty string).
         show_legend (bool, optional): Whether to show the legend (default is True).
-        ylabel (str, optional): The label for the y-axis (default is "").
+        ylabel (str, optional): The label for the y-axis (default is an empty string).
         palette (str, optional): The color palette to use for the plot (default is "Set2").
 
     Returns:
-    --------
         None: This function does not return any values; it produces a plot.
     """
     

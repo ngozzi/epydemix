@@ -1,8 +1,27 @@
 import numpy as np 
 from scipy import stats
+from typing import Dict, List, Tuple, Optional, Union, Any
 
 
-def initialize_particles(priors, num_particles):
+def initialize_particles(
+        priors: Dict[str, Any],
+        num_particles: int
+    ) -> Tuple[List[Dict[str, float]], np.ndarray, float]:
+    """
+    Initializes particles from the given priors and computes their initial weights.
+
+    Args:
+        priors (Dict[str, rv_frozen]): A dictionary where keys are parameter names and values are
+            `scipy.stats.rv_frozen` objects representing the priors for each parameter.
+        num_particles (int): The number of particles to initialize.
+
+    Returns:
+        Tuple[List[Dict[str, float]], np.ndarray, float]:
+            - A list of dictionaries where each dictionary represents a particle with sampled values
+              for each parameter.
+            - An array of weights for each particle, initialized to equal values.
+            - A float representing the initial tolerance, set to infinity.
+    """
     # Initialize particles from the prior
     particles = [{p: priors[p].rvs() for p in priors} for _ in range(num_particles)]
     weights = np.ones(num_particles) / num_particles
@@ -10,20 +29,27 @@ def initialize_particles(priors, num_particles):
     return particles, weights, tolerance
 
 
-def default_perturbation_kernel(particle, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition):
+def default_perturbation_kernel(
+        particle: Dict[str, float],
+        continuous_params: List[str],
+        discrete_params: List[str],
+        cov_matrix: np.ndarray,
+        priors: Dict[str, Any],
+        p_discrete_transition: float
+    ) -> Dict[str, float]:
     """
     Perturbs a particle's parameters.
 
-    Parameters:
-    - particle: dict, keys are parameter names, values are current values of the parameters
-    - continuous_params: list of parameter names that are continuous
-    - discrete_params: list of parameter names that are discrete
-    - cov_matrix: dict, covariance matrices for the continuous parameters
-    - priors: dict, prior distributions for the parameters
-    - discrete_jump_probs: dict, probability distributions for the discrete jumps
+    Args:
+        particle (Dict[str, float]): Dictionary where keys are parameter names and values are the current values of the parameters.
+        continuous_params (List[str]): List of parameter names that are continuous.
+        discrete_params (List[str]): List of parameter names that are discrete.
+        cov_matrix (np.ndarray): Covariance matrix for the continuous parameters.
+        priors (Dict[str, rv_frozen]): Dictionary where keys are parameter names and values are `scipy.stats.rv_frozen` objects representing the prior distributions.
+        p_discrete_transition (float): Probability of transitioning to a new state for discrete parameters.
 
     Returns:
-    - perturbed_particle: dict, the perturbed particle
+        Dict[str, float]: The perturbed particle, with updated parameter values.
     """
     perturbed_particle = particle.copy()
 
@@ -62,16 +88,25 @@ def default_perturbation_kernel(particle, continuous_params, discrete_params, co
     return perturbed_particle
 
 
-def compute_covariance_matrix(particles, continuous_params, weights=None, scaling_factor=1., apply_bandwidth=True):
+def compute_covariance_matrix(
+        particles: List[Dict[str, float]],
+        continuous_params: List[str],
+        weights: Optional[np.ndarray] = None,
+        scaling_factor: float = 1.0,
+        apply_bandwidth: bool = True
+    ) -> np.ndarray:
     """
     Computes the covariance matrix for the continuous parameters in a list of particles.
 
-    Parameters:
-    - particles: list of dicts, each dict contains a set of parameters
-    - continuous_params: list of str, the names of the continuous parameters
+    Args:
+        particles (List[Dict[str, float]]): A list of dictionaries where each dictionary contains parameter values for a particle.
+        continuous_params (List[str]): A list of parameter names that are continuous.
+        weights (Optional[np.ndarray]): An optional array of weights for the particles. Defaults to None, which implies equal weights.
+        scaling_factor (float): A factor by which to scale the covariance matrix. Defaults to 1.0.
+        apply_bandwidth (bool): Whether to apply a bandwidth adjustment to the covariance matrix. Defaults to True.
 
     Returns:
-    - covariance_matrix: numpy array, the covariance matrix of the continuous parameters
+        np.ndarray: The covariance matrix of the continuous parameters.
     """
     # Extract the values of the continuous parameters from each particle
     data = np.array([[particle[param] for param in continuous_params] for particle in particles])
@@ -95,22 +130,31 @@ def compute_covariance_matrix(particles, continuous_params, weights=None, scalin
     return covariance_matrix
 
 
-def compute_weights(new_particles, old_particles, old_weights, priors, cov_matrix, continuous_params, discrete_params, discrete_transition_prob):
+def compute_weights(
+        new_particles: List[Dict[str, float]],
+        old_particles: List[Dict[str, float]],
+        old_weights: List[float],
+        priors: Dict[str, Any],
+        cov_matrix: np.ndarray,
+        continuous_params: List[str],
+        discrete_params: List[str],
+        discrete_transition_prob: float
+    ) -> np.ndarray:
     """
     Computes the weights for new particles in generation t.
-    
-    Parameters:
-    - new_particles: list of dicts, the particles in the current generation t
-    - old_particles: list of dicts, the particles from the previous generation t-1
-    - old_weights: list of floats, the weights of particles from generation t-1
-    - priors: dict, keys are parameter names and values are scipy.stats objects representing the priors
-    - cov_matrix: covariance matrix used in the perturbation kernel for continuous parameters
-    - continuous_params: list of parameter names that are continuous
-    - discrete_params: list of parameter names that are discrete
-    - discrete_transition_prob: float, probability of any transition for discrete parameters
-    
+
+    Args:
+        new_particles (List[Dict[str, float]]): A list of dictionaries where each dictionary contains the parameters of new particles.
+        old_particles (List[Dict[str, float]]): A list of dictionaries where each dictionary contains the parameters of old particles from the previous generation.
+        old_weights (List[float]): A list of weights for the old particles.
+        priors (Dict[str, rv_frozen]): A dictionary where keys are parameter names and values are `scipy.stats.rv_frozen` objects representing the prior distributions.
+        cov_matrix (np.ndarray): Covariance matrix used in the perturbation kernel for continuous parameters.
+        continuous_params (List[str]): List of parameter names that are continuous.
+        discrete_params (List[str]): List of parameter names that are discrete.
+        discrete_transition_prob (float): Probability of transitioning to a new state for discrete parameters.
+
     Returns:
-    - new_weights: list of floats, the computed weights for the new particles
+        np.ndarray: A NumPy array of computed weights for the new particles, normalized to sum to 1.
     """
     # Precompute inverse and determinant of covariance matrix for the multivariate normal
     #inv_cov_matrix = np.linalg.inv(cov_matrix)
@@ -144,39 +188,57 @@ def compute_weights(new_particles, old_particles, old_weights, priors, cov_matri
     return new_weights
 
 
-def compute_effective_sample_size(weights): 
+def compute_effective_sample_size(weights: np.ndarray) -> float:
     """
-    Computes the effective sample size of a set of weights.
+    Computes the effective sample size (ESS) of a set of weights.
 
-    Parameters:
-    - weights: numpy array, the weights of the particles
+    Args:
+        weights (np.ndarray): A NumPy array of weights for the particles.
 
     Returns:
-    - ess: float, the effective sample size
+        float: The effective sample size, calculated as the reciprocal of the sum of squared weights.
     """
     ess = 1 / np.sum(weights**2)
     return ess
 
 
-def silverman_rule_of_thumb(neff, d):
+def silverman_rule_of_thumb(neff: int, d: int) -> float:
     """
-    Silverman's rule of thumb.
+    Computes the bandwidth factor using Silverman's rule of thumb.
+
+    Args:
+        neff (int): The effective sample size.
+        d (int): The number of dimensions (parameters).
+
+    Returns:
+        float: The bandwidth factor calculated using Silverman's rule of thumb.
     """
     return (4 / neff / (d + 2)) ** (1 / (d + 4))
 
 
-def weighted_quantile(values, weights, quantile):
+def weighted_quantile(
+        values: Union[np.ndarray, list],
+        weights: Union[np.ndarray, list],
+        quantile: float
+    ) -> float:
     """
     Compute the weighted quantile of a dataset.
 
-    Parameters:
-    - values: array-like, the data values
-    - weights: array-like, the weights associated with the data values
-    - quantile: float, the quantile to compute (must be between 0 and 1)
+    Args:
+        values (Union[np.ndarray, list]): Data values for which the quantile is to be computed.
+        weights (Union[np.ndarray, list]): Weights associated with the data values.
+        quantile (float): The quantile to compute, must be between 0 and 1.
 
     Returns:
-    - The weighted quantile value
+        float: The weighted quantile value.
+
+    Raises:
+        ValueError: If `quantile` is not between 0 and 1.
     """
+    # Ensure quantile is between 0 and 1
+    if not (0 <= quantile <= 1):
+        raise ValueError("Quantile must be between 0 and 1.")
+    
     values = np.asarray(values)
     weights = np.asarray(weights)
     

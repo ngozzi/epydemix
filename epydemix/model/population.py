@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import os 
 from collections import OrderedDict
+from typing import List, Dict, Optional
 
 demographic_grouping_prem = OrderedDict({
     "0-4": np.arange(0, 5).astype(str), 
@@ -38,49 +39,106 @@ contacts_age_group_mapping_mistry = {
 
 class Population:
     """
-    Population object class that handles contact matrices and population data.
+    Represents a population for epidemiological modeling, including demographic data and contact matrices.
+
+    The `Population` class manages and stores population data, including demographic distributions and contact matrices 
+    for various layers (e.g., school, work, home, community). It provides methods to add and retrieve this data for use 
+    in simulations and analysis.
+
+    Attributes:
+        name (str): The name of the population.
+        Nk (List): List representing population data for different demographic groups.
+        Nk_names (List[str]): List of demographic group names.
+        contact_matrices (Dict[str, np.ndarray]): Dictionary mapping layer names to their corresponding contact matrices 
+            (aggregated by age groups).
+    
+   Example 1: Online import (data will be fetched from GitHub)
+    population_online = load_population(
+        population_name="United_States",
+        # Specify the preferred contact data source (needed only if you want to override the default primary source)
+        contacts_source="mistry_2021",  
+        layers=["home", "work", "school", "community"]  # Load contact layers (by default all layers are imported)
+    )
+
+    Example 2: Offline import (data will be loaded from a local directory)
+    # Ensure that the folder is downloaded locally before running this
+    population_offline = load_population(
+        population_name="United_States",
+        path_to_data="path/to/local/epydemix_data/",  # Path to the local data folder
+        # Specify the preferred contact data source (needed only if you want to override the default primary source)
+        contacts_source="mistry_2021", 
+        layers=["home", "work", "school", "community"]  # Load contact layers (by default all layers are imported)
+    )
     """
 
-    def __init__(self, name="population"):
+    def __init__(self, name: str = "population") -> None:
         """
         Initializes the Population object.
+
+        Args:
+            name (str, optional): Name of the population object. Defaults to "population".
         
-        Parameters:
-        -----------
-            - name (str): Name of the population object (default is "population").
+        Attributes:
+            name (str): Name of the population.
+            contact_matrices (Dict[str, np.ndarray]): Dictionary to hold contact matrices for different layers.
+            Nk (List[float]): List representing population data for different demographic groups.
+            Nk_names (List[str]): List of demographic group names.
         """
         self.name = name
-        self.contact_matrices = {}  # Dictionary to hold contact matrices for different layers
+        self.contact_matrices = {}  # Dictionary of contact matrices for different layers
         self.Nk = []                # Population data
-        self.Nk_names = []          # list of demographic group names
+        self.Nk_names = []          # List of demographic group names
 
 
-    def add_contact_matrix(self, contact_matrix, layer_name="all"):
+    def add_contact_matrix(self, contact_matrix: np.ndarray, layer_name: str = "all") -> None:
         """
         Adds a contact matrix for a specified layer.
+
+        Args:
+            contact_matrix (np.ndarray): The contact matrix to be added, representing contact patterns between different demographic groups.
+            layer_name (str, optional): The name of the contact layer (e.g., "home", "work"). Defaults to "all".
         
-        Parameters:
-        -----------
-            - contact_matrix (np.ndarray): The contact matrix to be added.
-            - layer_name (str): The name of the contact layer (default is "all").
+        Returns:
+            None
         """
         self.contact_matrices[layer_name] = contact_matrix
 
 
-    def add_population(self, Nk, Nk_names=None): 
+    def add_population(self, Nk: List[float], Nk_names: Optional[List[str]] = None) -> None:
         """
-        Adds population data.
-        -----------
-        Parameters:
-            - Nk (list): Population data array.
+        Adds population data for different demographic groups.
+
+        Args:
+            Nk (List[float]): A list representing the population size for each demographic group.
+            Nk_names (Optional[List[str]], optional): A list of demographic group names. If not provided, 
+                                                      a default list of indices is generated. Defaults to None.
+        
+        Returns:
+            None
         """
         self.Nk = Nk
         if Nk_names is None:
             self.Nk_names = list(range(len(Nk)))
-        else: 
+        else:
             self.Nk_names = Nk_names
 
-def map_age_groups_to_idx(age_group_mapping, old_age_groups_idx, new_age_group_idx):
+
+def map_age_groups_to_idx(age_group_mapping: Dict[str, List[str]], 
+                          old_age_groups_idx: Dict[str, int], 
+                          new_age_group_idx: Dict[str, int]) -> Dict[int, int]:
+    """
+    Maps old age groups to new age groups using index mappings.
+
+    Args:
+        age_group_mapping (Dict[str, List[str]]): A dictionary where keys are new age groups, 
+                                                  and values are lists of old age groups.
+        old_age_groups_idx (Dict[str, int]): A dictionary mapping old age group names to their respective indices.
+        new_age_group_idx (Dict[str, int]): A dictionary mapping new age group names to their respective indices.
+
+    Returns:
+        Dict[int, int]: A dictionary mapping old age group indices to new age group indices.
+    """
+    
     # Initialize the result dictionary
     age_group_mapping_idx = {}
 
@@ -100,12 +158,26 @@ def map_age_groups_to_idx(age_group_mapping, old_age_groups_idx, new_age_group_i
     return age_group_mapping_idx
 
 
-def aggregate_matrix(initial_matrix, 
-                     old_population, 
-                     new_population, 
-                     age_group_mapping, 
-                     old_age_groups_idx, 
-                     new_age_group_idx):
+def aggregate_matrix(initial_matrix: np.ndarray, 
+                     old_population: np.ndarray, 
+                     new_population: np.ndarray, 
+                     age_group_mapping: Dict[str, list], 
+                     old_age_groups_idx: Dict[str, int], 
+                     new_age_group_idx: Dict[str, int]) -> np.ndarray:
+    """
+    Aggregates a contact matrix based on new demographic groupings.
+
+    Args:
+        initial_matrix (np.ndarray): The initial contact matrix (rates) between old demographic groups.
+        old_population (np.ndarray): The population sizes of the old demographic groups.
+        new_population (np.ndarray): The population sizes of the new aggregated demographic groups.
+        age_group_mapping (Dict[str, list]): A dictionary mapping new demographic group names to lists of old group names.
+        old_age_groups_idx (Dict[str, int]): A dictionary mapping old age group names to their indices in the contact matrix.
+        new_age_group_idx (Dict[str, int]): A dictionary mapping new age group names to their indices in the aggregated matrix.
+
+    Returns:
+        np.ndarray: The aggregated contact matrix (rates) for the new demographic groups.
+    """
 
     # Turn matrix of rates into contacts
     real_contacts = initial_matrix.copy()
@@ -136,48 +208,146 @@ def aggregate_matrix(initial_matrix,
     return aggregated_matrix_rate
 
   
-def aggregate_demographic(data, grouping): 
+def aggregate_demographic(data: pd.DataFrame, grouping: Dict[str, List[str]]) -> pd.DataFrame:
+    """
+    Aggregates demographic data based on a grouping dictionary.
+
+    Args:
+        data (pd.DataFrame): A DataFrame containing demographic data with columns 'group_name' and 'value'.
+        grouping (Dict[str, List[str]]): A dictionary where keys are new group names and values are lists of original group names to aggregate.
+
+    Returns:
+        pd.DataFrame: A DataFrame with two columns: 'group_name' and 'value', where 'value' is the sum of the 'value' column from the original DataFrame for each new group.
+    """
     Nk_new, Nk_names_new = [], []
 
     for new_group in grouping.keys(): 
         Nk_names_new.append(new_group)
-        Nk_new.append(data.loc[data.group_name.isin(grouping[new_group])]["value"].sum())
+        sum_value = data.loc[data.group_name.isin(grouping[new_group])]["value"].sum()
+        Nk_new.append(sum_value)
 
-    df_Nk_new = pd.DataFrame({"group_name": Nk_names_new, "value": Nk_new})
-    return df_Nk_new  
+    df_Nk_new = pd.DataFrame({
+        "group_name": Nk_names_new,
+        "value": Nk_new
+    })
+
+    return df_Nk_new
  
 
-def validate_population_name(population_name, path_to_data):
-    locations_list = pd.read_csv(os.path.join(path_to_data, "locations.csv"))["location"].values
+def validate_population_name(population_name: str, path_to_data: str) -> None:
+    """
+    Validates if a given population name exists in the locations data.
+
+    Args:
+        population_name (str): The name of the population to validate.
+        path_to_data (str): The path to the directory containing the 'locations.csv' file.
+
+    Raises:
+        ValueError: If the population_name is not found in the list of locations.
+    """
+    # Construct the full path to the locations CSV file
+    locations_file = os.path.join(path_to_data, "locations.csv")
+    
+    # Load the locations data and extract the list of locations
+    locations_list = pd.read_csv(locations_file)["location"].values
+
+     # Check if the population name is in the list of locations
     if population_name not in locations_list:
         raise ValueError(f"Location {population_name} not found in the list of supported locations. See {path_to_data}/locations.csv")
     
 
-def get_primary_contacts_source(population_name, path_to_data):
-    contact_matrices_sources = pd.read_csv(os.path.join(path_to_data, "locations.csv"))
-    source_location = contact_matrices_sources.loc[contact_matrices_sources.location == population_name, "primary_contact_source"]
-    contacts_source = source_location.iloc[0]
-    return contacts_source
+def get_primary_contacts_source(population_name: str, path_to_data: str) -> Optional[str]:
+    """
+    Retrieves the primary contact source for a given population name from the locations data.
+
+    Args:
+        population_name (str): The name of the population whose primary contact source is to be retrieved.
+        path_to_data (str): The path to the directory containing the 'locations.csv' file.
+
+    Returns:
+        Optional[str]: The primary contact source for the given population name. 
+                       Returns None if the population name is not found.
+
+    Raises:
+        ValueError: If the population name is not found in the locations data.
+    """
+    # Construct the full path to the locations CSV file
+    locations_file = os.path.join(path_to_data, "locations.csv")
+    
+    # Load the contact matrices sources data
+    contact_matrices_sources = pd.read_csv(locations_file)
+    
+    # Filter the data for the specified population name
+    source_location = contact_matrices_sources.loc[
+        contact_matrices_sources['location'] == population_name,
+        'primary_contact_source'
+    ]
+    
+    # Check if the population name was found
+    if source_location.empty:
+        raise ValueError(f"Population name '{population_name}' not found in {locations_file}.")
+    
+    # Retrieve and return the primary contact source
+    return source_location.iloc[0]
 
 
-def validate_contacts_source(contacts_source, supported_contacts_sources):
+def validate_contacts_source(contacts_source: str, supported_contacts_sources: List[str]) -> None:
+    """
+    Validates if a given contacts source is in the list of supported contact sources.
+
+    Args:
+        contacts_source (str): The contact source to validate.
+        supported_contacts_sources (List[str]): A list of supported contact sources.
+
+    Raises:
+        ValueError: If the contacts_source is not found in the list of supported sources.
+    """
     if contacts_source not in supported_contacts_sources:
         raise ValueError(f"Source {contacts_source} not found in the list of supported sources. Supported sources are {supported_contacts_sources}")
 
 
-def validate_age_group_mapping(age_group_mapping, allowed_values):
+def validate_age_group_mapping(age_group_mapping: Dict[str, List[str]], allowed_values: List[str]) -> None:
+    """
+    Validates that all age group mapping values are within the allowed values.
+
+    Args:
+        age_group_mapping (Dict[str, List[str]]): A dictionary where keys are age group names and values are lists of values for each age group.
+        allowed_values (List[str]): A list of allowed values that the age group mapping values should be within.
+
+    Raises:
+        ValueError: If any value in the age group mapping is not in the list of allowed values.
+    """
     values = np.concatenate(list(age_group_mapping.values())) 
     if not np.all(np.isin(values, allowed_values)): 
         raise ValueError(f"Age group mapping values must be in {allowed_values}")
 
 
-def load_population(population_name, 
-                    contacts_source=None, 
-                    path_to_data=None, 
-                    layers=["school", "work", "home", "community"], 
-                    age_group_mapping=None, 
-                    supported_contacts_sources=["prem_2017", "prem_2021", "mistry_2021"], 
-                    path_to_data_github="https://raw.githubusercontent.com/ngozzi/epydemix/main/epydemix_data/"): 
+def load_population(
+            population_name: str,
+            contacts_source: Optional[str] = None,
+            path_to_data: Optional[str] = None,
+            layers: List[str] = ["school", "work", "home", "community"],
+            age_group_mapping: Optional[Dict[str, List[str]]] = None,
+            supported_contacts_sources: List[str] = ["prem_2017", "prem_2021", "mistry_2021"],
+            path_to_data_github: str = "https://raw.githubusercontent.com/ngozzi/epydemix/main/epydemix_data/") -> 'Population':
+    """
+    Loads population and contact matrix data for a specified population.
+
+    Args:
+        population_name (str): The name of the population to load.
+        contacts_source (Optional[str]): The source of contact matrices. If None, the default source is retrieved.
+        path_to_data (Optional[str]): The local path to the data directory. If None, data is fetched from GitHub.
+        layers (List[str]): The layers of contact matrices to load.
+        age_group_mapping (Optional[Dict[str, List[str]]]): Mapping of age groups. If None, defaults based on contacts_source.
+        supported_contacts_sources (List[str]): List of supported contact sources.
+        path_to_data_github (str): The GitHub URL for fetching data if local path is not provided.
+
+    Returns:
+        Population: An instance of the Population class with the loaded data.
+
+    Raises:
+        ValueError: If any provided value is not valid or if there are issues with the data files.
+    """ 
     
     population = Population(name=population_name)
 
