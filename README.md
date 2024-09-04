@@ -6,11 +6,11 @@
 
 ## Features
 
-- Build custom epidemic models using different compartments (e.g., SIR, SEIR).
-- Load or create populations with contact layers (e.g., school, work, home, community).
-- Run simulations and analyze the results using metrics and visualization tools.
-- Calibrate models to real-world data.
-- Easily extendable and customizable for different scenarios.
+- **Design and simulate epidemic models** with customizable compartmental frameworks, including widely-used models like SIR, SEIR, and more complex structures tailored to specific scenarios.
+- **Load or create detailed real-world population datasets** for over 400 locations worldwide, incorporating demographic and contact patterns.
+- **Run simulations** and explore model outcomes and trends over time with powerful visualizations.
+- **Effortlessly calibrate your models** to real-world epidemiological data, ensuring accuracy and relevance by fine-tuning key parameters using Approximate Bayesian Computation frameworks.
+
 
 ## Installation
 
@@ -38,25 +38,38 @@ This will install the package and its dependencies, allowing you to make changes
 
 ### Requirements
 
+See [requirements.txt](https://github.com/ngozzi/epydemix/blob/main/requirements.txt)
 - Python 3.6 or higher
 - `numpy`
 - `pandas`
 - `matplotlib`
+- `multiprocess`
+- `scipy`
+- `seaborn`
+- `evalidate`
 
 ## Usage
 
 Once installed, you can start using **Epydemix** in your Python scripts or Jupyter notebooks. Below are some examples to get started.
 
-### Example 1: Creating a Model with a Default Population
+### Example 1: Creating a simple SIR model
 
 ```python
-from epydemix.model.epimodel import EpiModel
+from epydemix import EpiModel
 
-# Create a new epidemic model with the default population
-model = EpiModel(use_default_population=True)
+# Create a new epidemic model
+model = EpiModel(compartments=["S", "I", "R"])
 
-# Run simulations and analyze results
-model.run_simulation()
+# Define parameters
+model.add_parameter(name="beta", value=0.03)
+model.add_parameter(name="mu", value=0.1)
+
+# Define transitions 
+model.add_transition(source="S", target="I", rate="beta", agent="I")
+model.add_transition(source="I", target="R", rate="mu")
+
+# Run simulations specifying time frame and initial conditions
+results = model.run_simulations(start_date="2019-12-01", end_date="2020-04-01", S=99990, I=10)
 ```
 
 ### Example 2: Setting a Custom Population
@@ -98,21 +111,6 @@ For full documentation, including detailed guides on each module, visit the [Doc
 - **`epydemix.visualization`**: Visualization functions for plotting simulation results.
 - **`epydemix.utils`**: Utility functions and additional tools.
 
-## Running Tests
-
-You can run the package tests using `pytest`:
-
-1. Navigate to the root of the project:
-
-   ```bash
-   cd epydemix
-   ```
-
-2. Run the tests:
-
-   ```bash
-   pytest tests/
-   ```
 
 ## Contributing
 
