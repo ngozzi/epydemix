@@ -5,8 +5,6 @@ import datetime
 import random
 import string
 from evalidate import Expr, base_eval_model
-import os 
-from epydemix.population import Population
 
 
 def validate_parameter_shape(key, value, T, n_age):
