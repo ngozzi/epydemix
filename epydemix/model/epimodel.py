@@ -50,22 +50,25 @@ class EpiModel:
     """
 
     def __init__(self, 
-                    compartments: Optional[List] = None, 
-                    population_name: str = "epydemix_population", 
-                    population_data_path: Optional[str] = None, 
-                    contact_layers: Optional[List] = None, 
-                    contacts_source: Optional[str] = None, 
-                    age_group_mapping: Optional[Dict] = None, 
-                    supported_contacts_sources: Optional[List] = None, 
-                    use_default_population: bool = True,
-                    predefined_model: Optional[str] = None,  # New parameter for predefined model
-                    transmission_rate: float = 0.3,  # Defaults for SIR
-                    recovery_rate: float = 0.1  # Defaults for SIR
-                    ) -> None:
+                 name : str = "EpiModel",
+                 compartments: Optional[List] = None, 
+                 parameters: Optional[Dict] = None,
+                 population_name: str = "epydemix_population", 
+                 population_data_path: Optional[str] = None, 
+                 contact_layers: Optional[List] = None, 
+                 contacts_source: Optional[str] = None, 
+                 age_group_mapping: Optional[Dict] = None, 
+                 supported_contacts_sources: Optional[List] = None, 
+                 use_default_population: bool = True,
+                 predefined_model: Optional[str] = None,  # New parameter for predefined model
+                 transmission_rate: float = 0.3,  # Defaults for SIR
+                 recovery_rate: float = 0.1  # Defaults for SIR
+                 ) -> None:
             """
             Initializes the EpiModel instance.
 
             Args:
+                name (str, optional): The name of the epidemic model. Defaults to "EpiModel".
                 compartments (list, optional): A list of compartments for the model. Defaults to an empty list if None.
                 population_name (str, optional): The name of the population to load or create. Defaults to 'epydemix_population'.
                 population_data_path (str or None, optional): The path to the population data.
@@ -84,6 +87,7 @@ class EpiModel:
                 None
             """
             # Initialize core attributes
+            self.name = name
             self.transitions = {}
             self.transitions_list = []
             self.interventions = []
@@ -99,6 +103,10 @@ class EpiModel:
                 compartments = []
             if contact_layers is None:
                 contact_layers = ["school", "work", "home", "community"]
+
+            # Add parameters if provided
+            if parameters:
+                self.add_parameter(parameters_dict=parameters)
 
             self.add_compartments(compartments)
 
