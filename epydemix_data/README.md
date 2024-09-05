@@ -70,7 +70,7 @@ Here’s an improved and more detailed version of the example, incorporating you
 
 ### Using Data with the **Epydemix** Package
 
-The **Epydemix** package provides flexibility in loading demographic data and contact matrices for various regions. The `epydemix.population.load_population` function allows you to load this data either via **online import** (fetching from a remote source) or **offline import** (loading from a local directory).
+The **Epydemix** package provides flexibility in loading demographic data and contact matrices for various regions. The `epydemix.model.load_epydemix_population` function allows you to load this data either via **online import** (fetching from a remote source) or **offline import** (loading from a local directory).
 
 - **Online Import**: If `path_to_data` is not provided, **Epydemix** will attempt to import the data directly from GitHub.
 - **Offline Import**: If `path_to_data` is provided, **Epydemix** will attempt to load the data from a local directory. For this option, users must first download the corresponding data folder.
@@ -80,10 +80,10 @@ The **Epydemix** package provides flexibility in loading demographic data and co
 Below is an example of how to load population data for the United States, specifying both online and offline import options:
 
 ```python
-from epydemix.population import load_population
+from epydemix.model import load_epydemix_population
 
 # Example 1: Online import (data will be fetched from GitHub)
-population_online = load_population(
+population_online = load_epydemix_population(
     population_name="United_States",
     # Specify the preferred contact data source (needed only if you want to override the default primary source)
     contacts_source="mistry_2021",  
@@ -92,7 +92,7 @@ population_online = load_population(
 
 # Example 2: Offline import (data will be loaded from a local directory)
 # Ensure that the folder is downloaded locally before running this
-population_offline = load_population(
+population_offline = load_epydemix_population(
     population_name="United_States",
     path_to_data="path/to/local/epydemix_data/",  # Path to the local data folder
     # Specify the preferred contact data source (needed only if you want to override the default primary source)
@@ -101,9 +101,9 @@ population_offline = load_population(
 )
 
 # Use the population in your epidemic model
-model.set_custom_population(population=population_online)  # Using online data
+model.set_population(population=population_online)  # Using online data
 # or
-model.set_custom_population(population=population_offline)  # Using offline data
+model.set_population(population=population_offline)  # Using offline data
 ```
 
 ---

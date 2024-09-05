@@ -90,6 +90,39 @@ class Population:
         self.Nk_names = []          # List of demographic group names
 
 
+    def __repr__(self) -> str:
+        """
+        Returns a string representation of the Population object, 
+        summarizing its key attributes such as the name, number of demographic groups, 
+        and number of contact matrices.
+        
+        Returns:
+            str: String representation of the Population object.
+        """
+        # General population info
+        repr_str = f"Population(name='{self.name}')\n"
+        repr_str += f"Demographic groups: {len(self.Nk)} groups\n"
+        
+        # Population group names and sizes if available
+        if len(self.Nk) > 0 and len(self.Nk_names) > 0:
+            repr_str += "Population distribution:\n"
+            for name, size in zip(self.Nk_names, self.Nk):
+                repr_str += f"  - {name}: {size} individuals\n"
+        else:
+            repr_str += "Population data not available\n"
+        
+        # Contact matrices summary
+        repr_str += f"Contact matrices: {len(self.contact_matrices)} layers\n"
+        if len(self.contact_matrices) > 0:
+            repr_str += "Available layers:\n"
+            for layer in self.contact_matrices.keys():
+                repr_str += f"  - {layer}\n"
+        else:
+            repr_str += "No contact matrices available\n"
+        
+        return repr_str
+
+    
     def add_contact_matrix(self, contact_matrix: np.ndarray, layer_name: str = "all") -> None:
         """
         Adds a contact matrix for a specified layer.
@@ -322,7 +355,7 @@ def validate_age_group_mapping(age_group_mapping: Dict[str, List[str]], allowed_
         raise ValueError(f"Age group mapping values must be in {allowed_values}")
 
 
-def load_population(
+def load_epydemix_population(
             population_name: str,
             contacts_source: Optional[str] = None,
             path_to_data: Optional[str] = None,

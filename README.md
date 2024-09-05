@@ -1,4 +1,4 @@
-# Epydemix, the ABC of epidemics
+# Epydemix, the ABC of Epidemics
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
@@ -67,7 +67,7 @@ plot_quantiles(results, columns=["I_total", "S_total", "R_total"])
 ### Example of Loading Population Data
 
 ```python
-from epydemix.population import load_population
+from epydemix.model import load_population
 
 # Load population data for the United States with the Mistry 2021 contact matrix
 population = load_population(

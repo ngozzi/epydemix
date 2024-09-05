@@ -1,5 +1,5 @@
 import unittest
-from epydemix.model.population import Population, load_population
+from epydemix.model.population import Population, load_epydemix_population
 
 class TestPopulation(unittest.TestCase):
     def test_add_contact_matrix(self):
@@ -18,7 +18,7 @@ class TestPopulation(unittest.TestCase):
         self.assertEqual(self.population.Nk_names, Nk_names)
 
     def test_load_population(self):
-        self.population = load_population(
+        self.population = load_epydemix_population(
             population_name="United_States",
             contacts_source="prem_2021",
             path_to_data="../../epydemix_data/",

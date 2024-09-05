@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from numpy.random import multinomial
 from datetime import timedelta
-from .population import Population, load_population
+from .population import Population, load_epydemix_population
 import copy
 from typing import List, Dict, Optional, Union, Any, Callable
 
@@ -229,7 +229,7 @@ class EpiModel:
             return population
         else:
             # Load population using load_population, which handles both online and local sources
-            return load_population(
+            return load_epydemix_population(
                 population_name, 
                 contacts_source=contacts_source, 
                 path_to_data=population_data_path, 
@@ -239,7 +239,7 @@ class EpiModel:
             )
 
 
-    def set_custom_population(self, 
+    def import_epydemix_population(self, 
                             population_name: str, 
                             population_data_path: Optional[str] = None, 
                             contact_layers: Optional[List] = None, 
@@ -271,7 +271,7 @@ class EpiModel:
             supported_contacts_sources = ["prem_2017", "prem_2021", "mistry_2021"]
 
         # Load a new population using the same logic as in the constructor
-        self.population = load_population(
+        self.population = load_epydemix_population(
             population_name, 
             contacts_source=contacts_source, 
             path_to_data=population_data_path, 
@@ -659,7 +659,19 @@ class EpiModel:
         return initial_conditions_dict
 
 
+    def set_population(self, population: Population) -> None:
+        """
+        Sets the population for the epidemic model.
+
+        Args:
+            population (Population): The population object to set.
+
+        Returns:
+            None
+        """
+        self.population = population
     
+
     def run_simulations(self, 
                         start_date: Union[str, pd.Timestamp] = "2020-01-01", 
                         end_date: Union[str, pd.Timestamp] = "2020-12-31", 
