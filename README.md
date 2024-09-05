@@ -67,18 +67,17 @@ plot_quantiles(results, columns=["I_total", "S_total", "R_total"])
 ### Example of Loading Population Data
 
 ```python
-from epydemix.model import load_population
+from epydemix.model import load_epydemix_population
 
 # Load population data for the United States with the Mistry 2021 contact matrix
-population = load_population(
+population = load_epydemix_population(
     population_name="United_States",
-    path_to_data="path/to/epydemix_data/United_States",
     contacts_source="mistry_2021",
     layers=["home", "work", "school", "community"]
 )
 
 # Use the loaded population in your epidemic model
-model.set_custom_population(population=population)
+model.set_population(population=population)
 ```
 
 Epydemix can load data either locally from a folder or directly from online sources, making it easy to simulate a wide range of epidemic models on real population data.
