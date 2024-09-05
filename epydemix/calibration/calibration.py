@@ -1,4 +1,5 @@
 import numpy as np 
+import os
 import pandas as pd 
 from .calibration_results import CalibrationResults
 from ..utils.utils import compute_quantiles, combine_simulation_outputs
@@ -7,31 +8,31 @@ from datetime import datetime, timedelta
 from scipy import stats
 from ..utils.abc_smc_utils import initialize_particles, default_perturbation_kernel, compute_covariance_matrix, compute_weights, compute_effective_sample_size, weighted_quantile
 from multiprocess import Pool, cpu_count
-from typing import Callable, Dict, Any, Optional, Tuple
+from typing import Callable, Dict, Any, Optional
+import time
 
 
-def calibration(strategy: str, 
+def calibrate(strategy: str, 
                 simulation_function: Callable[[Dict[str, Any]], Any], 
                 priors: Dict[str, Any], 
                 parameters: Dict[str, Any], 
-                data: Dict[str, Any], 
-                Nsim: int = 100, 
+                observed_data: Dict[str, Any], 
                 top_perc: float = 0.05, 
+                Nsim : int = 100, 
                 tolerance: float = 0.1, 
-                error_metric: Callable[[Dict[str, Any], Any], float] = rmse, 
                 include_quantiles: bool = True, 
                 dates_column: str = "simulation_dates", 
-                perturbation_kernel: Callable = default_perturbation_kernel, 
-                distance_function: Callable[[Dict[str, Any], Any], float] = rmse, 
-                p_discrete_transition: float = 0.3,
                 num_particles: int = 1000, 
+                distance_function: Callable[[Dict[str, Any], Any], float] = rmse, 
+                perturbation_kernel: Callable = default_perturbation_kernel, 
+                p_discrete_transition: float = 0.3,
                 max_generations: int = 10, 
                 tolerance_quantile: float = 0.50,
                 minimum_tolerance: float = 0.15, 
                 max_time: Optional[timedelta] = None,
                 scaling_factor: float = 1.0,
                 apply_bandwidth: bool = True,
-                n_jobs: int = 4) -> CalibrationResults:
+                n_jobs: int = -1) -> CalibrationResults:
     """
     Unified calibration function to handle top percentage, ABC rejection, and ABC SMC methods.
     
@@ -40,26 +41,27 @@ def calibration(strategy: str,
         simulation_function (Callable[[Dict[str, Any]], Any]): The function that runs the simulation, which takes the parameters dictionary as input.
         priors (Dict[str, Any]): A dictionary of prior distributions for the parameters.
         parameters (Dict[str, Any]): A dictionary of parameters used in the simulation.
-        data (Dict[str, Any]): A dictionary containing the observed data.
-        Nsim (int, optional): The number of simulation runs to perform (default is 100).
+        observed_data (Dict[str, Any]): A dictionary containing the observed data.
+        Nsim (int, optional): The number of simulation runs to perform in top_perc approach (default is 100).
         top_perc (float, optional): Top percentage of simulations to select based on error metric (used in "top_perc").
         tolerance (float, optional): Error tolerance for rejection sampling (used in "abc_rejection").
-        error_metric (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
+        distance_function (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
         include_quantiles (bool, optional): Whether to compute and include quantiles in the results (default is True).
         dates_column (str, optional): The key used for simulation dates in the parameters (default is "simulation_dates").
-        
+        num_particles (int, optional): Number of particles for ABC SMC and ABC rejection (default is 1000).
+        distance_function (Callable[[Dict[str, Any], Any], float], optional): The distance function used to measure the distance between observed and simulated data (default is rmse).
+        n_jobs (int, optional): Number of parallel jobs to run during ABC SMC calibration. Default is -1 (uses all available CPUs).
+
         Arguments for "abc_smc":
             perturbation_kernel (Callable, optional): Perturbation kernel for ABC SMC (default is default_perturbation_kernel).
-            distance_function (Callable[[Dict[str, Any], Any], float], optional): The distance function used to measure the distance between observed and simulated data (default is rmse).
             p_discrete_transition (float, optional): The transition probability for discrete parameters (default is 0.3).
-            num_particles (int, optional): Number of particles for ABC SMC (default is 1000).
             max_generations (int, optional): Maximum number of generations for ABC SMC (default is 10).
             tolerance_quantile (float, optional): Quantile to reduce the tolerance by in ABC SMC (default is 0.50).
             minimum_tolerance (float, optional): Minimum tolerance for ABC SMC (default is 0.15).
             max_time (Optional[timedelta], optional): Maximum time allowed for ABC SMC calibration (default is None).
             scaling_factor (float, optional): Scaling factor for ABC SMC covariance matrix (default is 1.0).
             apply_bandwidth (bool, optional): Whether to apply bandwidth scaling to covariance matrix (default is True).
-            n_jobs (int, optional): Number of parallel jobs to run during ABC SMC calibration (default is 4).
+            
     
     Returns:
         CalibrationResults: The results of the calibration, including posterior distributions and selected simulations.
@@ -68,29 +70,32 @@ def calibration(strategy: str,
         return calibration_top_perc(simulation_function, 
                                     priors, 
                                     parameters, 
-                                    data, 
+                                    observed_data, 
                                     top_perc=top_perc, 
-                                    error_metric=error_metric, 
+                                    distance_function=distance_function, 
                                     Nsim=Nsim, 
                                     include_quantiles=include_quantiles, 
-                                    dates_column=dates_column)
+                                    dates_column=dates_column, 
+                                    n_jobs=n_jobs)
     
     elif strategy == "abc_rejection":
         return calibration_abc_rejection(simulation_function, 
                                          priors, 
                                          parameters, 
-                                         data, 
+                                         observed_data, 
                                          tolerance=tolerance, 
-                                         error_metric=error_metric, 
-                                         N_particles=Nsim, 
+                                         distance_function=distance_function, 
+                                         num_particles=num_particles, 
                                          include_quantiles=include_quantiles, 
-                                         dates_column=dates_column)
+                                         dates_column=dates_column, 
+                                         n_jobs=n_jobs)
+
     
     elif strategy == "abc_smc":
         return calibration_abc_smc(simulation_function, 
                                    priors, 
                                    parameters, 
-                                   data, 
+                                   observed_data, 
                                    perturbation_kernel=perturbation_kernel, 
                                    distance_function=distance_function, 
                                    p_discrete_transition=p_discrete_transition, 
@@ -112,12 +117,13 @@ def calibration(strategy: str,
 def calibration_top_perc(simulation_function: Callable, 
                          priors: Dict[str, Any], 
                          parameters: Dict[str, Any], 
-                         data: Dict[str, Any],
+                         observed_data: Dict[str, Any],
                          top_perc: float = 0.05,
-                         error_metric: Callable[[Dict[str, Any], Any], float] = rmse,
+                         distance_function: Callable[[Dict[str, Any], Any], float] = rmse,
                          Nsim: int = 100, 
                          include_quantiles: bool = True, 
-                         dates_column: str = "simulation_dates") -> CalibrationResults:
+                         dates_column: str = "simulation_dates", 
+                         n_jobs: int = -1) -> CalibrationResults:
     """
     Calibrates the model by selecting the top percentage of simulations based on the chosen error metric.
 
@@ -127,10 +133,11 @@ def calibration_top_perc(simulation_function: Callable,
         parameters (Dict[str, Any]): A dictionary of parameters used in the simulation.
         data (Dict[str, Any]): A dictionary containing the observed data with a key "data" pointing to observations.
         top_perc (float, optional): The top percentage of simulations to select based on the error metric (default is 0.05).
-        error_metric (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
+        distance_function (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
         Nsim (int, optional): The number of simulation runs to perform (default is 100).
         include_quantiles (bool, optional): Whether to compute and include quantiles in the results (default is True).
         dates_column (str, optional): The key used for simulation dates in the parameters dictionary (default is "simulation_dates").
+        n_jobs (int, optional): Number of parallel jobs for the ABC SMC process. Default is -1 (uses all available CPUs).
 
     Returns:
         CalibrationResults: An object containing the results of the calibration, including the posterior distribution, selected trajectories, and quantiles.
@@ -138,18 +145,38 @@ def calibration_top_perc(simulation_function: Callable,
     
     simulations, errors = [], []
     sampled_params = {p: [] for p in priors.keys()}
-    simulation_params = parameters.copy()
-    for n in range(Nsim):
 
-        # sample
+    # Use multiprocessing to run simulations in parallel
+    if n_jobs == -1:
+        n_jobs = cpu_count()
+
+    # Parallel processing setup
+    def init_worker():
+        # Seed the NumPy random number generator based on the process ID and current time
+        np.random.seed(os.getpid() + int(time.time() * 1000) % 1000000)
+
+    def worker(_):
+        simulation_params = parameters.copy()
+        #rng = random.Random(task_id)  # Seed a new RNG per task
+        sampled_params_worker = {}
         for param, distr in priors.items():
-            rv = distr.rvs()
-            sampled_params[param].append(rv)
+            #rv = distr.rvs(random_state=rng.randint(0, 2**32 - 1))
+            rv = distr.rvs(random_state=np.random)
+            sampled_params_worker[param] = rv
             simulation_params[param] = rv
 
         results = simulation_function(simulation_params)
+        error = distance_function(data=observed_data, simulation=results)
+        return results, error, sampled_params_worker
+    
+    with Pool(processes=n_jobs, initializer=init_worker) as pool:
+        results_list = pool.map(worker, range(Nsim))
+
+    for results, error, sampled_params_worker in results_list:
         simulations.append(results)
-        errors.append(error_metric(data=data, simulation=results))
+        errors.append(error)
+        for p in sampled_params_worker.keys():
+            sampled_params[p].append(sampled_params_worker[p])
 
     # compute error threshold
     err_threshold = np.quantile(errors, q=top_perc)
@@ -171,16 +198,16 @@ def calibration_top_perc(simulation_function: Callable,
     results.set_calibration_strategy("top_perc")
     results.set_posterior_distribution(pd.DataFrame(data=selected_params))
     results.set_selected_trajectories(np.array([el["data"] for el in selected_simulations]))
-    results.set_data(data)
+    results.set_data(observed_data)
     results.set_priors(priors)
     results.set_calibration_params({"top_perc": top_perc, 
-                                    "error_metric": error_metric, 
+                                    "distance_function": distance_function, 
                                     "Nsim": Nsim})
     results.set_error_distribution(np.array(errors)[idxs])
 
     if include_quantiles: 
         # compute quantiles 
-        selected_simulations_quantiles = compute_quantiles(selected_simulations_formatted, simulation_dates=simulation_params[dates_column])
+        selected_simulations_quantiles = compute_quantiles(selected_simulations_formatted, simulation_dates=parameters[dates_column])
         results.set_selected_quantiles(selected_simulations_quantiles)
 
     return results
@@ -204,6 +231,7 @@ def perturb_and_simulate(args):
             - model (Callable): A model function that simulates data.
             - observed_data (Dict[str, Any]): The observed data to compare against.
             - distance_function (Callable): A function that calculates the distance between observed and simulated data.
+            - task_id (int): The task ID for parallel processing.
 
     Returns:
         Tuple[Dict[str, Any], float, Dict[str, Any]]: A tuple containing:
@@ -211,8 +239,9 @@ def perturb_and_simulate(args):
             - distance (float): The distance between the observed and simulated data.
             - simulated_data (Dict[str, Any]): The data simulated from the perturbed particle.
     """
-    particle_index, particles, perturbation_kernel, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition, parameters, model, observed_data, distance_function = args
-    
+    particle_index, particles, perturbation_kernel, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition, parameters, model, observed_data, distance_function, task_id = args
+    np.random.seed()  
+
     # Sample and Perturb particle
     i = particle_index
     particle = perturbation_kernel(particles[i], continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition)
@@ -284,6 +313,10 @@ def calibration_abc_smc(model: Callable,
 
     particles, weights, tolerance = initialize_particles(priors, num_particles)
 
+    # Parallel processing setup
+    if n_jobs == -1:
+        n_jobs = cpu_count()
+
     for generation in range(max_generations):
         start_generation_time = datetime.now()
 
@@ -296,11 +329,7 @@ def calibration_abc_smc(model: Callable,
 
         total_accepted, total_simulations = 0, 0
 
-        # Parallel processing setup
-        if n_jobs == -1:
-            n_jobs = cpu_count()
         pool = Pool(n_jobs)
-
         while total_accepted < num_particles:
             args_list = [
                 (
@@ -315,9 +344,10 @@ def calibration_abc_smc(model: Callable,
                     parameters, 
                     model, 
                     observed_data, 
-                    distance_function
+                    distance_function, 
+                    task_id
                 )
-                for _ in range(n_jobs)
+                for task_id in range(n_jobs)
             ]
             
             results = pool.map(perturb_and_simulate, args_list)
@@ -334,18 +364,10 @@ def calibration_abc_smc(model: Callable,
 
         pool.close()
         pool.join()
-
-        # Update particles and weights
-        weights = compute_weights(new_particles, particles, weights, priors, cov_matrix, continuous_params, discrete_params, p_discrete_transition)
-        particles = new_particles
-
-        # Update tolerance for the next generation
-        #tolerance = np.quantile(distances, tolerance_quantile)
-        tolerance = weighted_quantile(distances, weights, tolerance_quantile)
+        end_generation_time = datetime.now()
 
         # Print generation information
         ESS = compute_effective_sample_size(weights)
-        end_generation_time = datetime.now()
         elapsed_time = end_generation_time - start_generation_time
         formatted_time = f"{elapsed_time.seconds // 3600:02}:{(elapsed_time.seconds % 3600) // 60:02}:{elapsed_time.seconds % 60:02}"
         print(f"Generation {generation + 1}: Tolerance = {tolerance}, Accepted Particles = {len(new_particles)}/{total_simulations}, Time = {formatted_time}, ESS = {ESS}")
@@ -359,6 +381,13 @@ def calibration_abc_smc(model: Callable,
         if max_time is not None and datetime.now() - start_time > max_time:
             print(f"Maximum time reached at generation {generation + 1}")
             break
+
+        # Update particles and weights
+        weights = compute_weights(new_particles, particles, weights, priors, cov_matrix, continuous_params, discrete_params, p_discrete_transition)
+        particles = new_particles
+
+        # Update tolerance for the next generation
+        tolerance = weighted_quantile(distances, weights, tolerance_quantile)
 
     # Format output
     results = CalibrationResults()
@@ -390,12 +419,13 @@ def calibration_abc_smc(model: Callable,
 def calibration_abc_rejection(simulation_function: Callable, 
                               priors: Dict[str, Any], 
                               parameters: Dict[str, Any], 
-                              data: Dict[str, Any],
+                              observed_data: Dict[str, Any],
                               tolerance: float,
-                              error_metric: Callable[[Dict[str, Any], Any], float] = rmse,
-                              N_particles: int = 100,
+                              distance_function: Callable[[Dict[str, Any], Any], float] = rmse,
+                              num_particles: int = 100,
                               include_quantiles: bool = True, 
-                              dates_column: str = "simulation_dates") -> CalibrationResults:
+                              dates_column: str = "simulation_dates", 
+                              n_jobs: int = -1) -> CalibrationResults:
     """
     Calibrates the model using Approximate Bayesian Computation (ABC) rejection sampling.
 
@@ -403,39 +433,53 @@ def calibration_abc_rejection(simulation_function: Callable,
         simulation_function (Callable): The function that runs the simulation, taking a dictionary of parameters as input.
         priors (Dict[str, Any]): A dictionary of prior distributions for the parameters.
         parameters (Dict[str, Any]): A dictionary of model parameters.
-        data (Dict[str, Any]): The observed data.
+        observed_data (Dict[str, Any]): The observed data.
         tolerance (float): The error tolerance for accepting a simulation.
-        error_metric (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
-        N_particles (int, optional): The number of particles to accept based on the tolerance (default is 100).
+        distance_function (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
+        num_particles (int, optional): The number of particles to accept based on the tolerance (default is 100).
         include_quantiles (bool, optional): Whether to compute and include quantiles in the results (default is True).
         dates_column (str, optional): The key used for simulation dates in the parameters dictionary (default is "simulation_dates").
+        n_jobs (int, optional): Number of parallel jobs for the ABC SMC process. Default is -1 (uses all available CPUs).
 
     Returns:
         CalibrationResults: An object containing the results of the calibration, including the posterior distribution, selected trajectories, and quantiles.
     """
             
-    simulation_params = parameters.copy()
     accepted_params = {p: [] for p in priors.keys()}
-    accepted_errors, accepted_simulations = [], [], []
+    accepted_errors, accepted_simulations = [], []
 
-    while len(accepted_errors) < N_particles:
+    # Parallel processing setup
+    def init_worker():
+        # Seed the NumPy random number generator based on the process ID and current time
+        np.random.seed(os.getpid() + int(time.time() * 1000) % 1000000)
+
+    def worker(_):
+        simulation_params = parameters.copy()
 
         # sample
         sampled_params = {}
         for param, distr in priors.items():
-            rv = distr.rvs()
+            rv = distr.rvs(random_state=np.random)
             sampled_params[param] = rv
             simulation_params[param] = rv
 
         # simulate
         results = simulation_function(simulation_params)
-        error = error_metric(data=data, simulation=results)
-        
-        if error < tolerance: 
-            for p in accepted_params.keys(): 
-                accepted_params[p].append(sampled_params[p])
-            accepted_errors.append(error)
-            accepted_simulations.append(results)
+        error = distance_function(data=observed_data, simulation=results)
+        return results, error, sampled_params
+    
+    if n_jobs == -1:
+        n_jobs = cpu_count()
+    pool = Pool(n_jobs, initializer=init_worker)
+
+    while len(accepted_errors) < num_particles:        
+        results_list = pool.map(worker, range(n_jobs))
+        for results, error, sampled_params in results_list:
+            if error < tolerance: 
+                for p in accepted_params.keys(): 
+                    accepted_params[p].append(sampled_params[p])
+                accepted_errors.append(error)
+                accepted_simulations.append(results)
 
     # format simulation results
     accepted_simulations_formatted = {}
@@ -447,16 +491,16 @@ def calibration_abc_rejection(simulation_function: Callable,
     results.set_calibration_strategy("abc_rejection")
     results.set_posterior_distribution(pd.DataFrame(data=accepted_params))
     results.set_selected_trajectories(np.array([el["data"] for el in accepted_simulations]))
-    results.set_data(data)
+    results.set_data(observed_data)
     results.set_priors(priors)
     results.set_calibration_params({"tolerance": tolerance, 
-                                    "error_metric": error_metric, 
-                                    "N_particles": N_particles})
+                                    "distance_function": distance_function, 
+                                    "num_particles": num_particles})
     results.set_error_distribution(np.array(accepted_errors))
 
     if include_quantiles: 
         # compute quantiles 
-        selected_simulations_quantiles = compute_quantiles(accepted_simulations_formatted, simulation_dates=simulation_params[dates_column])
+        selected_simulations_quantiles = compute_quantiles(accepted_simulations_formatted, simulation_dates=parameters[dates_column])
         results.set_selected_quantiles(selected_simulations_quantiles)
 
     return results

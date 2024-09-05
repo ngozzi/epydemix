@@ -229,6 +229,7 @@ def plot_posterior_2d(calibration_results: Any,
                       kind: str = "hist", 
                       palette: str = "Blues", 
                       prior_range: bool = False, 
+                      title: str = None,  
                       **kwargs) -> None:
     """
     Plots the 2D posterior distribution of two given parameters from the calibration results.
@@ -264,6 +265,8 @@ def plot_posterior_2d(calibration_results: Any,
         ax.set_xlabel(xlabel)
     if ylabel is not None:
         ax.set_ylabel(ylabel)
+    if title is not None:
+        ax.set_title(title)
 
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
