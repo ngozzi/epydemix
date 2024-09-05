@@ -6,7 +6,7 @@ from .metrics import *
 from datetime import datetime, timedelta
 from scipy import stats
 from ..utils.abc_smc_utils import initialize_particles, default_perturbation_kernel, compute_covariance_matrix, compute_weights, compute_effective_sample_size, weighted_quantile
-from multiprocess import Pool
+from multiprocess import Pool, cpu_count
 from typing import Callable, Dict, Any, Optional, Tuple
 
 
@@ -245,7 +245,7 @@ def calibration_abc_smc(model: Callable,
                         scaling_factor: float = 1.0,
                         apply_bandwidth: bool = True,
                         dates_column: str = "simulation_dates", 
-                        n_jobs: int = 4) -> CalibrationResults:
+                        n_jobs: int = -1) -> CalibrationResults:
     """
     Calibrates the model using Approximate Bayesian Computation Sequential Monte Carlo (ABC-SMC).
 
@@ -266,7 +266,7 @@ def calibration_abc_smc(model: Callable,
         scaling_factor (float, optional): Scaling factor for the covariance matrix in perturbation (default is 1.0).
         apply_bandwidth (bool, optional): Whether to apply bandwidth scaling to the covariance matrix (default is True).
         dates_column (str, optional): The key for simulation dates in the parameters (default is "simulation_dates").
-        n_jobs (int, optional): Number of parallel jobs for the ABC SMC process (default is 4).
+        n_jobs (int, optional): Number of parallel jobs for the ABC SMC process. Default is -1 (uses all available CPUs).
 
     Returns:
         CalibrationResults: Object containing the results of the ABC SMC calibration, including posterior distributions, trajectories, and quantiles.
@@ -297,6 +297,8 @@ def calibration_abc_smc(model: Callable,
         total_accepted, total_simulations = 0, 0
 
         # Parallel processing setup
+        if n_jobs == -1:
+            n_jobs = cpu_count()
         pool = Pool(n_jobs)
 
         while total_accepted < num_particles:
