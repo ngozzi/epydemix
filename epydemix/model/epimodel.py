@@ -174,7 +174,6 @@ class EpiModel:
         return repr_str
 
 
-
     def load_predefined_model(self, model_name: str, transmission_rate: float = 0.3, recovery_rate: float = 0.1, incubation_rate : float = 0.2) -> None:
         """
         Loads a predefined epidemic model (e.g., SIR, SEIR, SIS) with predefined compartments and transitions.
@@ -801,8 +800,15 @@ def simulate(epimodel,
 
     Returns:
         dict: The formatted results of the simulation after applying post-processing.
+
+    Raises:
+        ValueError: If the model has no transitions defined.
     """
 
+    # check that the model has transitions
+    if len(epimodel.transitions_list) == 0:
+        raise ValueError("The model has no transitions defined. Please add transitions before running simulations.")
+    
     if ppfun_args is None:
         ppfun_args = {}
         
