@@ -8,6 +8,7 @@ from datetime import timedelta
 from .population import Population, load_epydemix_population
 import copy
 from typing import List, Dict, Optional, Union, Any, Callable
+from multiprocess import Pool, cpu_count
 
 
 class EpiModel:
@@ -726,9 +727,10 @@ class EpiModel:
                         post_processing_function: Callable = lambda x: x, 
                         ppfun_args: Optional[Dict] = None, 
                         percentage_in_agents: float = 0.01,
+                        n_jobs: int = -1,
                         **kwargs) -> SimulationResults:
         """
-        Simulates the epidemic model over the given time period.
+        Simulates the epidemic model over the given time period in parallel.
 
         Args:
             start_date (str or pd.Timestamp): The start date of the simulation. Default is "2020-01-01".
@@ -736,10 +738,11 @@ class EpiModel:
             initial_conditions_dict (dict, optional): A dictionary of initial conditions for the simulation.
             steps (int or str, optional): The number of time steps or step frequency (default is "daily").
             Nsim (int, optional): The number of simulation runs to perform (default is 100).
-            quantiles (list of float, optional): A list of quantiles to compute for the simulation results (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
-            post_processing_function (callable, optional): A function to apply to each simulation output for post-processing. Default is an identity function.
-            ppfun_args (dict, optional): Arguments to pass to the post-processing function. Default is an empty dictionary.
-            percentage_in_agents (float, optional): The percentage of the population to initialize in the agents compartment. Default is 0.01.
+            quantiles (list of float, optional): A list of quantiles to compute for the simulation results.
+            post_processing_function (callable, optional): A function to apply to each simulation output for post-processing.
+            ppfun_args (dict, optional): Arguments to pass to the post-processing function.
+            percentage_in_agents (float, optional): The percentage of the population to initialize in the agents compartment.
+            n_jobs (int, optional): The number of processes to use for parallelization. Default is -1 (uses all available CPUs).
             **kwargs: Additional arguments to pass to the stochastic simulation function.
 
         Returns:
@@ -748,10 +751,10 @@ class EpiModel:
 
         if quantiles is None:
             quantiles = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]
-        
+
         if ppfun_args is None:
             ppfun_args = {}
-        
+
         # Compute the simulation dates
         simulation_dates = compute_simulation_dates(start_date, end_date, steps=steps)
 
@@ -759,16 +762,27 @@ class EpiModel:
         if initial_conditions_dict is None:
             initial_conditions_dict = self.create_default_initial_conditions(percentage_in_agents=percentage_in_agents)
 
-        # Perform the simulations
+        # Define the worker function for multiprocessing
+        def worker(_):
+            return simulate(self, simulation_dates, post_processing_function=post_processing_function, 
+                            ppfun_args=ppfun_args, initial_conditions_dict=initial_conditions_dict, **kwargs)
+
+        # Use multiprocessing to run simulations in parallel
+        if n_jobs == -1:
+            n_jobs = cpu_count()
+        
+        with Pool(processes=n_jobs) as pool:
+            results_list = pool.map(worker, range(Nsim))
+
+        # Combine the results from all simulations
         simulated_compartments = {}
-        for i in range(Nsim):
-            results = simulate(self, simulation_dates, post_processing_function=post_processing_function, ppfun_args=ppfun_args,initial_conditions_dict=initial_conditions_dict, **kwargs)
+        for results in results_list:
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
         # Convert results to NumPy arrays and compute quantiles
         simulated_compartments = {k: np.array(v) for k, v in simulated_compartments.items()}
         df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles)
-        
+
         # Format and return simulation results
         simulation_results = SimulationResults()
         simulation_results.set_Nsim(Nsim)
