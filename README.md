@@ -38,7 +38,7 @@ This will install the package and its dependencies, allowing you to make changes
 See [requirements.txt](https://github.com/ngozzi/epydemix/blob/main/requirements.txt)
 
 
-## Usage
+## Quick Start
 
 Once installed, you can start using **Epydemix** in your Python scripts or Jupyter notebooks. Below an example to get started.
 

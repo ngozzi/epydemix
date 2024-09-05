@@ -44,8 +44,7 @@ class EpiModel:
         results = model.run_simulations(
             start_date="2019-12-01", 
             end_date="2020-04-01", 
-            Susceptible=99990, 
-            Infected=10
+            initial_conditions_dict={"Susceptible": 99990, "Infected": 10}
         )
     """
 
@@ -128,6 +127,52 @@ class EpiModel:
                 self.load_predefined_model(predefined_model, transmission_rate, recovery_rate, incubation_rate)
             else:
                 self.add_compartments(compartments)  # Add custom compartments if no predefined model
+
+
+    def __repr__(self) -> str:
+        """
+        Returns a string representation of the EpiModel object,
+        summarizing its name, compartments, transitions, parameters, and population.
+
+        Returns:
+            str: String representation of the EpiModel object.
+        """
+        repr_str = f"EpiModel(name='{self.name}')\n"
+
+        # Compartments summary
+        repr_str += f"Compartments: {len(self.compartments)}\n"
+        if len(self.compartments) > 0:
+            repr_str += "  " + ", ".join(self.compartments) + "\n"
+        else:
+            repr_str += "  No compartments defined\n"
+
+        # Transitions summary
+        repr_str += f"Transitions: {len(self.transitions_list)}\n"
+        if len(self.transitions_list) > 0:
+            repr_str += "  Transitions between compartments:\n"
+            for tr in self.transitions_list:
+                repr_str += f"    {tr.source} -> {tr.target}, rate: {tr.rate}\n"
+        else:
+            repr_str += "  No transitions defined\n"
+
+        # Parameters summary
+        repr_str += f"Parameters: {len(self.parameters)}\n"
+        if len(self.parameters) > 0:
+            repr_str += "  Model parameters:\n"
+            for param_name, param_value in self.parameters.items():
+                repr_str += f"    {param_name}: {param_value}\n"
+        else:
+            repr_str += "  No parameters defined\n"
+
+        # Population summary
+        repr_str += f"Population: {self.population.name}\n"
+        repr_str += f"  Population size: {sum(self.population.Nk)} individuals\n"
+        repr_str += f"  Demographic groups: {len(self.population.Nk_names)}\n"
+        if len(self.population.Nk_names) > 0:
+            repr_str += "    " + ", ".join([str(name) for name in self.population.Nk_names]) + "\n"
+
+        return repr_str
+
 
 
     def load_predefined_model(self, model_name: str, transmission_rate: float = 0.3, recovery_rate: float = 0.1, incubation_rate : float = 0.2) -> None:

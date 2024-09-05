@@ -30,6 +30,7 @@ class SimulationResults:
         self.compartment_idx = {}
         self.parameters = {}
 
+
     def set_Nsim(self, Nsim: int) -> None:
         """
         Sets the number of simulations.
