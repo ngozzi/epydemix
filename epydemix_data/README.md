@@ -64,8 +64,6 @@ Where:
   - **`prem_2017/`**: Contains similar contact matrix files from the Prem 2017 study, broken down by the same contexts (home, work, school, community, all).
   - **`prem_2021/`**: Contains updated contact matrices from the Prem 2021 study, also structured by context.
 
-Here’s an improved and more detailed version of the example, incorporating your request to explain both online and offline data import options for **Epydemix**:
-
 ---
 
 ### Using Data with the **Epydemix** Package
