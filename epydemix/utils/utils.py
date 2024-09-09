@@ -7,10 +7,15 @@ import string
 from evalidate import Expr, base_eval_model
 from typing import Union, Dict, List, Any, Optional
 
+def is_scalar(value):
+    return np.isscalar(value) and not isinstance(value, (str, bytes))
+
+def is_iterable(value):
+    return isinstance(value, Iterable) and not isinstance(value, (str, bytes))
 
 def validate_parameter_shape(
         key: str,
-        value: Union[np.ndarray, Iterable],
+        value: Any,
         T: int,
         n_age: int
     ) -> None:
@@ -26,10 +31,11 @@ def validate_parameter_shape(
     Raises:
         ValueError: If the value does not meet the required shape criteria or if the type is unsupported.
     """
-    if isinstance(value, (int, float)):
-        return  # Scalars don't need validation beyond their type
+    #if isinstance(value, (int, float)):
+    if is_scalar(value):
+        return  # Scalars don't need validation 
 
-    elif isinstance(value, Iterable):
+    elif is_iterable(value):
         value = np.array(value)
 
         if value.ndim == 1:  # 1D array
@@ -46,11 +52,11 @@ def validate_parameter_shape(
             raise ValueError(f"Unsupported number of dimensions for parameter '{key}': {value.ndim}")
         
     else:
-            raise ValueError(f"Unsupported type for parameter '{key}': {type(value)}")
+        raise ValueError(f"Unsupported type for parameter '{key}': {type(value)}")
 
 
 def resize_parameter(
-        value: Union[np.ndarray, int, float],
+        value: Any,
         T: int,
         n_age: int
     ) -> np.ndarray:
@@ -64,8 +70,8 @@ def resize_parameter(
 
     Returns:
         np.ndarray: A 2D array with shape (T, n_age).
-    """
-    if isinstance(value, (int, float)):  # Scalar value
+    """ 
+    if is_scalar(value): # Scalar value
         return np.full((T, n_age), value)
 
     value = np.array(value)
@@ -80,7 +86,7 @@ def resize_parameter(
     
 
 def create_definitions(
-        parameters: Dict[str, Union[np.ndarray, int, float, Iterable]],
+        parameters: Dict[str, Any],
         T: int,
         n_age: int
     ) -> Dict[str, np.ndarray]:

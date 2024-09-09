@@ -312,7 +312,7 @@ def calibration_abc_smc(model: Callable,
             discrete_params.append(param)
 
     particles, weights, tolerance = initialize_particles(priors, num_particles)
-
+    
     # Parallel processing setup
     if n_jobs == -1:
         n_jobs = cpu_count()

@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple, Optional, Union, Any
 def initialize_particles(
         priors: Dict[str, Any],
         num_particles: int
-    ) -> Tuple[List[Dict[str, float]], np.ndarray, float]:
+    ) -> Tuple[List[Dict[str, Any]], np.ndarray, float]:
     """
     Initializes particles from the given priors and computes their initial weights.
 
@@ -30,13 +30,13 @@ def initialize_particles(
 
 
 def default_perturbation_kernel(
-        particle: Dict[str, float],
+        particle: Dict[str, Any],
         continuous_params: List[str],
         discrete_params: List[str],
         cov_matrix: np.ndarray,
         priors: Dict[str, Any],
         p_discrete_transition: float
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
     """
     Perturbs a particle's parameters.
 
@@ -89,7 +89,7 @@ def default_perturbation_kernel(
 
 
 def compute_covariance_matrix(
-        particles: List[Dict[str, float]],
+        particles: List[Dict[str, Any]],
         continuous_params: List[str],
         weights: Optional[np.ndarray] = None,
         scaling_factor: float = 1.0,
@@ -131,8 +131,8 @@ def compute_covariance_matrix(
 
 
 def compute_weights(
-        new_particles: List[Dict[str, float]],
-        old_particles: List[Dict[str, float]],
+        new_particles: List[Dict[str, Any]],
+        old_particles: List[Dict[str, Any]],
         old_weights: List[float],
         priors: Dict[str, Any],
         cov_matrix: np.ndarray,
