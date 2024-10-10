@@ -238,13 +238,14 @@ def perturb_and_simulate(args):
             - perturbed particle (Dict[str, Any]): The perturbed particle.
             - distance (float): The distance between the observed and simulated data.
             - simulated_data (Dict[str, Any]): The data simulated from the perturbed particle.
+            - particle_index (int): The index of the particle.
     """
     particle_index, particles, perturbation_kernel, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition, parameters, model, observed_data, distance_function, task_id = args
     np.random.seed()  
 
     # Sample and Perturb particle
     i = particle_index
-    particle = perturbation_kernel(particles[i], continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition)
+    particle = perturbation_kernel(particles[i], particles, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition)
 
     # Simulate data from perturbed particle
     full_params = {}
@@ -255,7 +256,7 @@ def perturb_and_simulate(args):
     # Calculate distance
     distance = distance_function(observed_data, simulated_data)
 
-    return particle, distance, simulated_data
+    return particle, distance, simulated_data, i
 
 
 def calibration_abc_smc(model: Callable, 
@@ -327,7 +328,7 @@ def calibration_abc_smc(model: Callable,
         distances = []
         simulated_points = []
 
-        total_accepted, total_simulations = 0, 0
+        total_accepted, total_simulations, indexes = 0, 0, []
 
         pool = Pool(n_jobs)
         while total_accepted < num_particles:
@@ -352,13 +353,14 @@ def calibration_abc_smc(model: Callable,
             
             results = pool.map(perturb_and_simulate, args_list)
             
-            for particle, distance, simulated_data in results:
+            for particle, distance, simulated_data, i in results:
                 total_simulations += 1
                 if distance < tolerance:
                     new_particles.append(particle)
                     distances.append(distance)
                     total_accepted += 1
                     simulated_points.append(simulated_data["data"])
+                    indexes.append(i)
                     if total_accepted >= num_particles:
                         break
 
@@ -382,7 +384,8 @@ def calibration_abc_smc(model: Callable,
             print(f"Maximum time reached at generation {generation + 1}")
             break
 
-        # Update particles and weights
+        # Update particles and weights, before order new particles such that they are in the same order as the old particles
+        new_particles = np.array(new_particles)[indexes]
         weights = compute_weights(new_particles, particles, weights, priors, cov_matrix, continuous_params, discrete_params, p_discrete_transition)
         particles = new_particles
 

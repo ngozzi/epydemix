@@ -31,6 +31,7 @@ def initialize_particles(
 
 def default_perturbation_kernel(
         particle: Dict[str, Any],
+        particles: List[Dict[str, Any]],
         continuous_params: List[str],
         discrete_params: List[str],
         cov_matrix: np.ndarray,
@@ -42,6 +43,7 @@ def default_perturbation_kernel(
 
     Args:
         particle (Dict[str, float]): Dictionary where keys are parameter names and values are the current values of the parameters.
+        particles (List[Dict[str, float]]): List of dictionaries where each dictionary contains the parameters of a particle.
         continuous_params (List[str]): List of parameter names that are continuous.
         discrete_params (List[str]): List of parameter names that are discrete.
         cov_matrix (np.ndarray): Covariance matrix for the continuous parameters.
@@ -78,12 +80,30 @@ def default_perturbation_kernel(
 
     # Perturb discrete parameters
     for param in discrete_params:
-    
+
         current_value = particle[param]
-        # The probability distribution must exclude the current value if we are jumping to a different state
         if np.random.rand() < p_discrete_transition:
-            # Get the probability distribution for the current parameter
-            perturbed_particle[param] = np.random.choice(range(priors[param].support()[0], priors[param].support()[1]))
+
+            # get values of this parameter from all particles
+            param_values = np.array([p[param] for p in particles])
+
+            # get unique values
+            unique_values = np.unique(param_values)
+
+            ### THIS IS THE ORIGINAL CODE
+            # compute probability of drawing each value
+            p_draw = np.array([np.sum(param_values == value) for value in unique_values])
+            p_draw[np.where(unique_values == current_value)[0][0]] = 0
+            p_draw = p_draw / p_draw.sum()
+            # perturb discrete particle
+            perturbed_particle[param] = np.random.choice(unique_values, p=p_draw)
+
+            #### EXPPPP ####
+            #p_draw = np.ones(len(unique_values)) / len(unique_values)
+            #p_draw[np.where(unique_values == current_value)[0][0]] = 0
+            #p_draw = p_draw / p_draw.sum()
+            #perturbed_particle[param] = np.random.choice(unique_values, p=p_draw)
+            ################
 
     return perturbed_particle
 
@@ -115,7 +135,7 @@ def compute_covariance_matrix(
     if len(continuous_params) == 1:
         covariance_matrix = np.array([[np.var(data)]])
     else:
-        covariance_matrix = np.cov(data, rowvar=False)
+        covariance_matrix = np.cov(data, aweights=weights, rowvar=False)
 
     # Compute bandwidth factor
     if apply_bandwidth:
@@ -128,6 +148,77 @@ def compute_covariance_matrix(
     covariance_matrix *= scaling_factor
 
     return covariance_matrix
+
+
+def compute_weights_exp(
+        new_particles: List[Dict[str, Any]],
+        old_particles: List[Dict[str, Any]],
+        old_weights: List[float],
+        priors: Dict[str, Any],
+        cov_matrix: np.ndarray,
+        continuous_params: List[str],
+        discrete_params: List[str],
+        discrete_transition_prob: float
+    ) -> np.ndarray:
+    """
+    Computes the weights for new particles in generation t.
+
+    Args:
+        new_particles (List[Dict[str, float]]): A list of dictionaries where each dictionary contains the parameters of new particles.
+        old_particles (List[Dict[str, float]]): A list of dictionaries where each dictionary contains the parameters of old particles from the previous generation.
+        old_weights (List[float]): A list of weights for the old particles.
+        priors (Dict[str, rv_frozen]): A dictionary where keys are parameter names and values are `scipy.stats.rv_frozen` objects representing the prior distributions.
+        cov_matrix (np.ndarray): Covariance matrix used in the perturbation kernel for continuous parameters.
+        continuous_params (List[str]): List of parameter names that are continuous.
+        discrete_params (List[str]): List of parameter names that are discrete.
+        discrete_transition_prob (float): Probability of transitioning to a new state for discrete parameters.
+
+    Returns:
+        np.ndarray: A NumPy array of computed weights for the new particles, normalized to sum to 1.
+    """
+    new_weights = np.zeros(len(new_particles))
+    
+    for i, new_particle in enumerate(new_particles):
+        # Compute the prior probability of the new particle
+        prior_prob = np.prod([priors[param].pdf(new_particle[param]) for param in continuous_params])
+        prior_prob *= np.prod([priors[param].pmf(new_particle[param]) for param in discrete_params])
+
+        # Compute the denominator of the weight expression for this new particle
+        kernel_probs = np.zeros(len(old_particles))
+
+        for j, old_particle in enumerate(old_particles):
+            # Continuous parameters: compute the difference for the current pair of particles (old -> new)
+            diff_vector = np.array([new_particle[param] - old_particle[param] for param in continuous_params])
+            continuous_kernel_prob = stats.multivariate_normal.pdf(diff_vector, mean=np.zeros(len(continuous_params)), cov=cov_matrix, allow_singular=True)
+
+            # Discrete parameters: compute the transition probabilities
+            discrete_kernel_prob = 1.0
+            for param in discrete_params:
+                if new_particle[param] == old_particle[param]:
+                    discrete_kernel_prob *= (1 - discrete_transition_prob)
+                else:
+                    # Count the occurrences of each value in the old particles
+                    param_values = np.array([p[param] for p in old_particles])
+                    unique_values, counts = np.unique(param_values, return_counts=True)
+                    total_count = np.sum(counts)
+
+                    # Probability of transitioning to the new particle's discrete value
+                    new_value_prob = counts[unique_values == new_particle[param]] / total_count
+                    discrete_kernel_prob *= new_value_prob * discrete_transition_prob
+
+            # Combine the continuous and discrete probabilities for this old particle
+            kernel_probs[j] = continuous_kernel_prob * discrete_kernel_prob
+
+        # Compute the denominator by summing over all old particles
+        denominator = np.sum(old_weights * kernel_probs)
+        
+        # Calculate the weight for the new particle
+        new_weights[i] = prior_prob / denominator
+
+    # Normalize the weights so they sum to 1
+    new_weights /= np.sum(new_weights)
+    
+    return new_weights
 
 
 def compute_weights(
@@ -173,8 +264,33 @@ def compute_weights(
 
         discrete_kernel_probs = np.ones(len(old_particles))
         for param in discrete_params:
-            transitions = np.array([new_particle[param] != old_particle[param] for old_particle in old_particles])
-            discrete_kernel_probs *= np.where(transitions, discrete_transition_prob, 1 - discrete_transition_prob)
+
+            ######## EXPPPP ########
+            # compute correct transition probabilities
+            # get values of this parameter from all particles
+            param_values = np.array([p[param] for p in old_particles])
+
+            # get unique values
+            unique_values = np.unique(param_values)
+
+            # compute probability of drawing each value
+            p_draw = np.array([np.sum(param_values == value) for value in unique_values])
+
+            for k, old_particle in enumerate(old_particles):
+                if new_particle[param] == old_particle[param]:
+                    discrete_kernel_probs[k] *= (1 - discrete_transition_prob)
+                else:
+                    p_draw_cp = p_draw.copy()
+                    p_draw_cp[np.where(unique_values == old_particle[param])[0][0]] = 0
+                    p_draw_cp = p_draw_cp / p_draw_cp.sum()
+                    discrete_kernel_probs[k] *= p_draw_cp[np.where(unique_values == new_particle[param])[0][0]] * discrete_transition_prob
+                    #discrete_kernel_probs[k] *= discrete_transition_prob / (len(unique_values) - 1)
+            #######################
+
+            ### THIS IS THE ORIGINAL CODE
+            #transitions = np.array([new_particle[param] != old_particle[param] for old_particle in old_particles])
+            #discrete_kernel_probs *= np.where(transitions, discrete_transition_prob, 1 - discrete_transition_prob)
+            #####
 
         kernel_probs = np.exp(continuous_kernel_probs) * discrete_kernel_probs
         denominator = np.sum(old_weights * kernel_probs)
