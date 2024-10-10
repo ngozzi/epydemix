@@ -245,7 +245,7 @@ def perturb_and_simulate(args):
 
     # Sample and Perturb particle
     i = particle_index
-    particle = perturbation_kernel(particles[i], particles, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition)
+    particle = perturbation_kernel(particles[i], continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition)
 
     # Simulate data from perturbed particle
     full_params = {}
