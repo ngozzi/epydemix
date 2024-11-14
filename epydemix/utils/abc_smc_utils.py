@@ -30,7 +30,8 @@ def initialize_particles(
 
 
 def default_perturbation_kernel(
-        particle: Dict[str, Any],
+        weights, 
+        particles, 
         continuous_params: List[str],
         discrete_params: List[str],
         cov_matrix: np.ndarray,
@@ -52,12 +53,16 @@ def default_perturbation_kernel(
     Returns:
         Dict[str, float]: The perturbed particle, with updated parameter values.
     """
-    perturbed_particle = particle.copy()
+
+    # Sample a particle
+    idx = np.random.choice(range(len(particles)), p=weights)
+    perturbed_particle = particles[idx].copy()
 
     # Perturb continuous parameters
     if continuous_params:
+
         # Extract current values for continuous parameters
-        current_values = np.array([particle[param] for param in continuous_params])
+        current_values = np.array([perturbed_particle[param] for param in continuous_params])
 
         while True:
             # Apply multivariate normal transition
@@ -66,7 +71,11 @@ def default_perturbation_kernel(
             # Check if all perturbed values are within the prior support
             within_support = True
             for i, param in enumerate(continuous_params):
+                # get limits of this parameter
+                #lower_bound = np.array([particle[param] for particle in particles]).min()
+                #upper_bound = np.array([particle[param] for particle in particles]).max()
                 if not (priors[param].support()[0] <= perturbed_values[i] <= priors[param].support()[1]):
+                #if not (lower_bound <= perturbed_values[i] <= upper_bound):
                     within_support = False
                     break
 
@@ -80,14 +89,29 @@ def default_perturbation_kernel(
     # Perturb discrete parameters
     for param in discrete_params:
 
-        current_value = particle[param]
+        # sample a parameter value
+        unique_values, counts = np.unique([particle[param] for particle in particles], return_counts=True)
+        #p_draw = counts / np.sum(counts)
+        #current_value = np.random.choice(unique_values, p=p_draw)
+        #perturbed_particle[param] = np.random.choice(unique_values, p=p_draw)
+        #current_value = perturbed_particle[param].copy()
+        
         if np.random.rand() < p_discrete_transition:
 
             # sample an alternative value for this parameter 
-            new_value = priors[param].rvs()
-            while new_value == current_value:
-                new_value = priors[param].rvs()
+            #new_value = priors[param].rvs()
+            new_value = np.random.choice(unique_values, p=np.ones(len(unique_values)) / len(unique_values))
+            while new_value == perturbed_particle[param]:
+                #new_value = priors[param].rvs()
+                new_value = np.random.choice(unique_values, p=np.ones(len(unique_values)) / len(unique_values))
             perturbed_particle[param] = new_value
+            #perturbed_particle[param] = priors[param].rvs()
+
+            #print(f"Discrete parameter {param} transitioned from {current_value} to {perturbed_particle[param]}")
+
+            #if param == "Delta": 
+            #    print(f"Discrete parameter {param}: {priors[param].rvs()}")
+            #    print(f"Discrete parameter {param}: {priors[param]}")
 
     return perturbed_particle
 
