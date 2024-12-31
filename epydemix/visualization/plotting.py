@@ -167,15 +167,16 @@ def plot_selected_quantiles(calibration_results: Any,
         ax.legend(pleg + [p_actual], handles + ["actual"], loc="upper left", frameon=False)
 
 
-def plot_posterior(calibration_results: Any, 
-                   parameter: str, 
-                   ax: Optional[plt.Axes] = None, 
-                   xlabel: Optional[str] = None, 
-                   kind: str = "hist", 
-                   color: str = "dodgerblue", 
-                   ylabel: str = "", 
-                   prior_range: bool = False, 
-                   **kwargs) -> None:
+def plot_posterior_distribution(calibration_results: Any, 
+                                parameter: str, 
+                                generation = None,  
+                                ax: Optional[plt.Axes] = None, 
+                                xlabel: Optional[str] = None, 
+                                kind: str = "hist", 
+                                color: str = "dodgerblue", 
+                                ylabel: str = "", 
+                                prior_range: bool = False, 
+                                **kwargs) -> None:
     """
     Plots the posterior distribution of a given parameter from the calibration results.
 
@@ -197,7 +198,7 @@ def plot_posterior(calibration_results: Any,
     if ax is None:
         fig, ax = plt.subplots(dpi=300, figsize=(10,4))
 
-    df_posterior = calibration_results.get_posterior_distribution()
+    df_posterior = calibration_results.get_posterior_distribution(generation=generation)
     if kind == "hist":
         sns.histplot(data=df_posterior, x=parameter, ax=ax, color=color, **kwargs)
     elif kind == "kde": 
@@ -220,9 +221,10 @@ def plot_posterior(calibration_results: Any,
         ax.set_xlim(xmin, xmax)
 
 
-def plot_posterior_2d(calibration_results: Any, 
+def plot_posterior_distribution_2d(calibration_results: Any, 
                       parameter_x: str, 
                       parameter_y: str, 
+                      generation = None,
                       ax: Optional[plt.Axes] = None, 
                       xlabel: Optional[str] = None, 
                       ylabel: Optional[str] = None, 
@@ -253,7 +255,7 @@ def plot_posterior_2d(calibration_results: Any,
     if ax is None:
         fig, ax = plt.subplots(dpi=300, figsize=(6,4))
 
-    df_posterior = calibration_results.get_posterior_distribution()
+    df_posterior = calibration_results.get_posterior_distribution(generation=generation)
     if kind == "hist":
         sns.histplot(data=df_posterior, x=parameter_x, y=parameter_y, ax=ax, palette=palette, **kwargs)
     elif kind == "kde": 
@@ -462,7 +464,8 @@ def compute_spectral_radius(m: np.ndarray) -> float:
     return np.max(np.abs(np.linalg.eigvals(m)))
     
 
-def plot_error_distribution(calibration_results: Any, 
+def plot_distance_distribution(calibration_results: Any, 
+                               generation = None,
                             ax: Optional[plt.Axes] = None, 
                             xlabel: Optional[str] = None, 
                             kind: str = "hist", 
@@ -488,7 +491,7 @@ def plot_error_distribution(calibration_results: Any,
     if ax is None:
         fig, ax = plt.subplots(dpi=300, figsize=(10,4))
 
-    errors = calibration_results.get_error_distribution()
+    errors = calibration_results.get_distances(generation=generation)
     if kind == "hist":
         sns.histplot(data=errors, ax=ax, color=color, **kwargs)
     elif kind == "kde": 
