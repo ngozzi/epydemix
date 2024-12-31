@@ -2,37 +2,29 @@ import numpy as np
 import os
 import pandas as pd 
 from .calibration_results import CalibrationResults
-from ..utils.utils import compute_quantiles, combine_simulation_outputs
 from .metrics import *
 from datetime import datetime, timedelta
-from scipy import stats
-from ..utils.abc_smc_utils import initialize_particles, default_perturbation_kernel, compute_covariance_matrix, compute_weights, compute_effective_sample_size, weighted_quantile
-from multiprocess import Pool, cpu_count
+from ..utils.abc_smc_utils import DefaultPerturbationContinuous, DefaultPerturbationDiscrete, sample_prior
 from typing import Callable, Dict, Any, Optional
-import time
 
 
 def calibrate(strategy: str, 
-                simulation_function: Callable[[Dict[str, Any]], Any], 
-                priors: Dict[str, Any], 
-                parameters: Dict[str, Any], 
-                observed_data: Dict[str, Any], 
-                top_perc: float = 0.05, 
-                Nsim : int = 100, 
-                tolerance: float = 0.1, 
-                include_quantiles: bool = True, 
-                dates_column: str = "simulation_dates", 
-                num_particles: int = 1000, 
-                distance_function: Callable[[Dict[str, Any], Any], float] = rmse, 
-                perturbation_kernel: Callable = default_perturbation_kernel, 
-                p_discrete_transition: float = 0.3,
-                max_generations: int = 10, 
-                tolerance_quantile: float = 0.50,
-                minimum_tolerance: float = 0.15, 
-                max_time: Optional[timedelta] = None,
-                scaling_factor: float = 1.0,
-                apply_bandwidth: bool = True,
-                n_jobs: int = -1) -> CalibrationResults:
+              simulation_function: Callable[[Dict[str, Any]], Any], 
+              priors: Dict[str, Any], 
+              parameters: Dict[str, Any], 
+              observed_data: Dict[str, Any], 
+              top_quantile: float = 0.05, 
+              Nsim : int = 100, 
+              epsilon: float = 0.1,
+              num_particles: int = 1000, 
+              distance_function: Callable[[Dict[str, Any], Any], float] = rmse, 
+              max_generations: int = 10, 
+              epsilon_quantile_level: float = 0.50,
+              minimum_epsilon: float = 0.15, 
+              max_time: Optional[timedelta] = None,   
+              total_simulations_budget: Optional[int] = None,             
+              epsilon_schedule = None, 
+              perturbations = None) -> CalibrationResults:
     """
     Unified calibration function to handle top percentage, ABC rejection, and ABC SMC methods.
     
@@ -66,64 +58,53 @@ def calibrate(strategy: str,
     Returns:
         CalibrationResults: The results of the calibration, including posterior distributions and selected simulations.
     """
-    if strategy == "top_perc":
-        return calibration_top_perc(simulation_function, 
-                                    priors, 
-                                    parameters, 
-                                    observed_data, 
-                                    top_perc=top_perc, 
+    
+    if strategy == "abc_top_quantile":
+        return calibration_abc_top_quantile(simulation_function=simulation_function, 
+                                    priors=priors, 
+                                    parameters=parameters, 
+                                    observed_data=observed_data, 
+                                    top_quantile=top_quantile, 
                                     distance_function=distance_function, 
-                                    Nsim=Nsim, 
-                                    include_quantiles=include_quantiles, 
-                                    dates_column=dates_column, 
-                                    n_jobs=n_jobs)
+                                    Nsim=Nsim)
     
     elif strategy == "abc_rejection":
         return calibration_abc_rejection(simulation_function, 
                                          priors, 
                                          parameters, 
                                          observed_data, 
-                                         tolerance=tolerance, 
+                                         epsilon=epsilon, 
                                          distance_function=distance_function, 
                                          num_particles=num_particles, 
-                                         include_quantiles=include_quantiles, 
-                                         dates_column=dates_column, 
-                                         n_jobs=n_jobs)
-
+                                         max_time=max_time,
+                                         total_simulations_budget=total_simulations_budget)
     
     elif strategy == "abc_smc":
-        return calibration_abc_smc(simulation_function, 
-                                   priors, 
-                                   parameters, 
-                                   observed_data, 
-                                   perturbation_kernel=perturbation_kernel, 
-                                   distance_function=distance_function, 
-                                   p_discrete_transition=p_discrete_transition, 
-                                   num_particles=num_particles, 
-                                   max_generations=max_generations, 
-                                   tolerance_quantile=tolerance_quantile, 
-                                   minimum_tolerance=minimum_tolerance, 
-                                   max_time=max_time, 
-                                   include_quantiles=include_quantiles, 
-                                   scaling_factor=scaling_factor, 
-                                   apply_bandwidth=apply_bandwidth, 
-                                   dates_column=dates_column, 
-                                   n_jobs=n_jobs)
-    
+        return calibration_abc_smc(observed_data=observed_data, 
+                                    num_particles=num_particles, 
+                                    num_generations=max_generations, 
+                                    epsilon_schedule=epsilon_schedule, 
+                                    priors=priors, 
+                                    epsilon_quantile_level=epsilon_quantile_level, 
+                                    perturbations=perturbations, 
+                                    distance_function=distance_function,
+                                    simulate_model=simulation_function, 
+                                    user_params=parameters, 
+                                    minimum_epsilon=minimum_epsilon, 
+                                    max_time=max_time, 
+                                    total_simulations_budget=total_simulations_budget)
+                            
     else:
         raise ValueError(f"Unsupported calibration strategy: {strategy}")
 
 
-def calibration_top_perc(simulation_function: Callable, 
+def calibration_abc_top_quantile(simulation_function: Callable, 
                          priors: Dict[str, Any], 
                          parameters: Dict[str, Any], 
                          observed_data: Dict[str, Any],
-                         top_perc: float = 0.05,
+                         top_quantile: float = 0.05,
                          distance_function: Callable[[Dict[str, Any], Any], float] = rmse,
-                         Nsim: int = 100, 
-                         include_quantiles: bool = True, 
-                         dates_column: str = "simulation_dates", 
-                         n_jobs: int = -1) -> CalibrationResults:
+                         Nsim: int = 100) -> CalibrationResults:
     """
     Calibrates the model by selecting the top percentage of simulations based on the chosen error metric.
 
@@ -135,294 +116,232 @@ def calibration_top_perc(simulation_function: Callable,
         top_perc (float, optional): The top percentage of simulations to select based on the error metric (default is 0.05).
         distance_function (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
         Nsim (int, optional): The number of simulation runs to perform (default is 100).
-        include_quantiles (bool, optional): Whether to compute and include quantiles in the results (default is True).
-        dates_column (str, optional): The key used for simulation dates in the parameters dictionary (default is "simulation_dates").
-        n_jobs (int, optional): Number of parallel jobs for the ABC SMC process. Default is -1 (uses all available CPUs).
 
     Returns:
         CalibrationResults: An object containing the results of the calibration, including the posterior distribution, selected trajectories, and quantiles.
     """
     
-    simulations, errors = [], []
+    simulations, distances = [], []
     sampled_params = {p: [] for p in priors.keys()}
 
-    # Use multiprocessing to run simulations in parallel
-    if n_jobs == -1:
-        n_jobs = cpu_count()
+    # Parameter names for consistent indexing
+    param_names = list(priors.keys())
 
-    # Parallel processing setup
-    def init_worker():
-        # Seed the NumPy random number generator based on the process ID and current time
-        np.random.seed(os.getpid() + int(time.time() * 1000) % 1000000)
-
-    def worker(_):
-        simulation_params = parameters.copy()
-        #rng = random.Random(task_id)  # Seed a new RNG per task
-        sampled_params_worker = {}
-        for param, distr in priors.items():
-            #rv = distr.rvs(random_state=rng.randint(0, 2**32 - 1))
-            rv = distr.rvs(random_state=np.random)
-            sampled_params_worker[param] = rv
-            simulation_params[param] = rv
-
-        results = simulation_function(simulation_params)
-        error = distance_function(data=observed_data, simulation=results)
-        return results, error, sampled_params_worker
-    
-    with Pool(processes=n_jobs, initializer=init_worker) as pool:
-        results_list = pool.map(worker, range(Nsim))
-
-    for results, error, sampled_params_worker in results_list:
+    # Run simulations
+    for n in range(Nsim):
+        params = sample_prior(priors, param_names)
+        full_params = {**parameters, **dict(zip(param_names, params))}
+        results = simulation_function(full_params)
+        distance = distance_function(data=observed_data, simulation=results)
         simulations.append(results)
-        errors.append(error)
-        for p in sampled_params_worker.keys():
-            sampled_params[p].append(sampled_params_worker[p])
+        distances.append(distance)
+        for i, p in enumerate(param_names):
+            sampled_params[p].append(params[i])
 
-    # compute error threshold
-    err_threshold = np.quantile(errors, q=top_perc)
-    idxs = np.argwhere(np.array(errors) <= err_threshold).ravel()
+    # Compute distance threshold
+    distance_threshold = np.quantile(distances, q=top_quantile)
+    idxs = np.argwhere(np.array(distances) <= distance_threshold).ravel()
 
-    # select runs 
+    # select runs and parameters
     selected_simulations = np.array(simulations)[idxs]
-
-    # format simulation results
-    selected_simulations_formatted = {}
-    for res in selected_simulations:
-        selected_simulations_formatted = combine_simulation_outputs(selected_simulations_formatted, res)
-
-    # select parameters
     selected_params = {p: np.array(arr)[idxs] for p, arr in sampled_params.items()}
 
     # format results 
     results = CalibrationResults()
-    results.set_calibration_strategy("top_perc")
-    results.set_posterior_distribution(pd.DataFrame(data=selected_params))
-    results.set_selected_trajectories(np.array([el["data"] for el in selected_simulations]))
-    results.set_data(observed_data)
+    results.set_calibration_strategy("abc_top_quantile")
+    results.set_posterior_distribution(pd.DataFrame(data=selected_params), generation=0)
+    results.set_selected_trajectories(selected_simulations, generation=0)
+    results.set_distances(np.array(distances)[idxs], generation=0)
+    results.set_observed_data(observed_data)
     results.set_priors(priors)
-    results.set_calibration_params({"top_perc": top_perc, 
+    results.set_calibration_params({"top_quantile": top_quantile, 
                                     "distance_function": distance_function, 
                                     "Nsim": Nsim})
-    results.set_error_distribution(np.array(errors)[idxs])
-
-    if include_quantiles: 
-        # compute quantiles 
-        selected_simulations_quantiles = compute_quantiles(selected_simulations_formatted, simulation_dates=parameters[dates_column])
-        results.set_selected_quantiles(selected_simulations_quantiles)
-
     return results
 
 
-def perturb_and_simulate(args):
+def calibration_abc_smc(observed_data, 
+            num_particles, 
+            num_generations, 
+            epsilon_schedule=None, 
+            priors=None, 
+            epsilon_quantile_level=0.5, 
+            perturbations=None, 
+            distance_function=rmse,
+            simulate_model=None, 
+            user_params=None, 
+            minimum_epsilon=None, 
+            max_time=None, 
+            total_simulations_budget=None):
+    """Implements the ABC-SMC algorithm with a customizable simulation model.
+    observed_data: the observed dataset
+    num_particles: number of particles in each generation
+    num_generations: number of generations to run
+    epsilon_schedule: list of epsilon thresholds for each generation (optional)
+    priors: dictionary of parameter_name -> scipy.stats prior distribution
+    epsilon_quantile_level: quantile level to set next generation's epsilon (default 0.5)
+    perturbations: dictionary of parameter_name -> Perturbation objects (optional)
+    simulate_model: function that simulates data given a dictionary of parameters
+    user_params: dictionary of fixed parameters provided by the user (optional)
+    Returns: posterior samples
     """
-    Perturb a particle, simulate data, and compute the distance.
-
-    Args:
-        args (Tuple): A tuple containing the following elements:
-            - particle_index (int): Index of the particle to perturb.
-            - particles (np.ndarray): Array of particles.
-            - perturbation_kernel (Callable): A function that perturbs a particle.
-            - continuous_params (list): List of continuous parameters.
-            - discrete_params (list): List of discrete parameters.
-            - cov_matrix (np.ndarray): Covariance matrix for perturbing particles.
-            - priors (Dict[str, Any]): Dictionary of priors for the parameters.
-            - p_discrete_transition (float): Probability of transitioning discrete parameters.
-            - parameters (Dict[str, Any]): Model parameters to be passed to the simulation.
-            - model (Callable): A model function that simulates data.
-            - observed_data (Dict[str, Any]): The observed data to compare against.
-            - distance_function (Callable): A function that calculates the distance between observed and simulated data.
-            - task_id (int): The task ID for parallel processing.
-
-    Returns:
-        Tuple[Dict[str, Any], float, Dict[str, Any]]: A tuple containing:
-            - perturbed particle (Dict[str, Any]): The perturbed particle.
-            - distance (float): The distance between the observed and simulated data.
-            - simulated_data (Dict[str, Any]): The data simulated from the perturbed particle.
-    """
-    weights, particles, perturbation_kernel, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition, parameters, model, observed_data, distance_function, task_id = args
-    #np.random.seed()  
-
-    # Sample and Perturb particle
-    particle = perturbation_kernel(weights, particles, continuous_params, discrete_params, cov_matrix, priors, p_discrete_transition)
-
-    # Simulate data from perturbed particle
-    full_params = {}
-    full_params.update(particle)
-    full_params.update(parameters)
-    simulated_data = model(full_params)
-
-    # Calculate distance
-    distance = distance_function(observed_data, simulated_data)
-
-    return particle, distance, simulated_data
-
-
-def calibration_abc_smc(model: Callable, 
-                        priors: Dict[str, Any], 
-                        parameters: Dict[str, Any], 
-                        observed_data: Dict[str, Any], 
-                        perturbation_kernel: Callable = default_perturbation_kernel, 
-                        distance_function: Callable[[Dict[str, Any], Dict[str, Any]], float] = rmse, 
-                        p_discrete_transition: float = 0.3,
-                        num_particles: int = 1000, 
-                        max_generations: int = 10, 
-                        tolerance_quantile: float = 0.50,
-                        minimum_tolerance: float = 0.15, 
-                        max_time: Optional[timedelta] = None,
-                        include_quantiles: bool = True, 
-                        scaling_factor: float = 1.0,
-                        apply_bandwidth: bool = True,
-                        dates_column: str = "simulation_dates", 
-                        n_jobs: int = -1) -> CalibrationResults:
-    """
-    Calibrates the model using Approximate Bayesian Computation Sequential Monte Carlo (ABC-SMC).
-
-    Args:
-        model (Callable): The model function that takes in parameters and returns simulated data.
-        priors (Dict[str, Any]): A dictionary of prior distributions for the parameters.
-        parameters (Dict[str, Any]): A dictionary of model parameters.
-        observed_data (Dict[str, Any]): The observed data to compare against.
-        perturbation_kernel (Callable, optional): A kernel function for perturbing particles (default is default_perturbation_kernel).
-        distance_function (Callable[[Dict[str, Any], Dict[str, Any]], float], optional): Function to compute the distance between observed and simulated data (default is rmse).
-        p_discrete_transition (float, optional): Probability of transitioning discrete parameters (default is 0.3).
-        num_particles (int, optional): Number of particles in the population (default is 1000).
-        max_generations (int, optional): Maximum number of generations for ABC SMC (default is 10).
-        tolerance_quantile (float, optional): Quantile used to reduce tolerance at each generation (default is 0.50).
-        minimum_tolerance (float, optional): Minimum tolerance to stop the ABC SMC process (default is 0.15).
-        max_time (Optional[timedelta], optional): Maximum allowed time for the calibration (default is None).
-        include_quantiles (bool, optional): Whether to compute quantiles from the results (default is True).
-        scaling_factor (float, optional): Scaling factor for the covariance matrix in perturbation (default is 1.0).
-        apply_bandwidth (bool, optional): Whether to apply bandwidth scaling to the covariance matrix (default is True).
-        dates_column (str, optional): The key for simulation dates in the parameters (default is "simulation_dates").
-        n_jobs (int, optional): Number of parallel jobs for the ABC SMC process. Default is -1 (uses all available CPUs).
-
-    Returns:
-        CalibrationResults: Object containing the results of the ABC SMC calibration, including posterior distributions, trajectories, and quantiles.
-    """
+    if simulate_model is None:
+        raise ValueError("A simulation model function must be provided.")
     
+    if user_params is None:
+        user_params = {}
+
+    # Define the results object 
+    results = CalibrationResults()   
+    results.set_calibration_strategy("abc_smc")
+
+    particles, weights, distances, simulations = [], [], [], []
+
+    # Parameter names for consistent indexing
+    param_names = list(priors.keys())
+
+    # Separate parameters into continuous and discrete
+    continuous_params = [name for name in param_names if hasattr(priors[name], 'pdf')]
+    discrete_params = [name for name in param_names if name not in continuous_params]
+
+    # Default perturbation functions
+    if perturbations is None:
+        perturbations = {
+            param: (DefaultPerturbationContinuous(param) if param in continuous_params else DefaultPerturbationDiscrete(param, priors[param]))
+            for param in param_names
+        }
+
+    # Initialize the first generation 
+    for _ in range(num_particles):
+        params = sample_prior(priors, param_names)
+        full_params = {**user_params, **dict(zip(param_names, params))}
+        simulated_data = simulate_model(full_params)
+        dist = distance_function(simulated_data, observed_data)
+        particles.append(params)
+        weights.append(1.0 / num_particles)
+        distances.append(dist)
+        simulations.append(simulated_data)
+
+    particles = np.array(particles)
+    weights = np.array(weights)
+    distances = np.array(distances)
+    simulations = np.array(simulations)
+
+    # Set the results for the first generation
+    results.set_posterior_distribution(pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))}), generation=0)
+    results.set_distances(distances, generation=0)
+    results.set_weights(weights, generation=0)
+    results.set_selected_trajectories(simulations, generation=0)
+
+    # Sequential generations
     start_time = datetime.now()
-
-    # Get continuous and discrete parameters
-    continuous_params, discrete_params = [], []
-    for param in priors:
-        if isinstance(priors[param].dist, stats.rv_continuous):
-            continuous_params.append(param)
-        elif isinstance(priors[param].dist, stats.rv_discrete):
-            discrete_params.append(param)
-
-    particles, weights, tolerance = initialize_particles(priors, num_particles)
-    
-    # Parallel processing setup
-    if n_jobs == -1:
-        n_jobs = cpu_count()
-
-    for generation in range(max_generations):
+    n_simulations = 0 # Counter for total number of simulations
+    for gen in range(0, num_generations):
         start_generation_time = datetime.now()
 
-        # Compute covariance matrix
-        cov_matrix = compute_covariance_matrix(particles, continuous_params, weights, scaling_factor, apply_bandwidth)
-        
-        new_particles = []
-        distances = []
-        simulated_points = []
+        # Compute epsilon for the generation
+        if epsilon_schedule is None:
+            epsilon = np.quantile(distances, epsilon_quantile_level)
+        else:
+            epsilon = epsilon_schedule[gen]
 
-        total_accepted, total_simulations = 0, 0
+        print(f"Running generation {gen + 1}, epsilon: {epsilon}")
 
-        #pool = Pool(n_jobs)
-        while total_accepted < num_particles:
-            args_list = [
-                (
-                    #np.random.choice(range(num_particles), p=weights), 
-                    weights,
-                    particles, 
-                    perturbation_kernel, 
-                    continuous_params, 
-                    discrete_params, 
-                    cov_matrix, 
-                    priors, 
-                    p_discrete_transition, 
-                    parameters, 
-                    model, 
-                    observed_data, 
-                    distance_function, 
-                    task_id
-                )
-                for task_id in range(n_jobs)
-            ]
-            
-            #results = pool.map(perturb_and_simulate, args_list)
-            #for particle, distance, simulated_data in results:
-            #    total_simulations += 1
-            #    if distance < tolerance:
-            #        new_particles.append(particle)
-            #        distances.append(distance)
-            #        total_accepted += 1
-            #       simulated_points.append(simulated_data["data"])
-            #        if total_accepted >= num_particles:
-            #            break
-            particle, distance, simulated_data = perturb_and_simulate(args_list[0])            
-            total_simulations += 1
-            if distance < tolerance:
-                new_particles.append(particle)
-                distances.append(distance)
-                total_accepted += 1
-                simulated_points.append(simulated_data["data"])
-                if total_accepted >= num_particles:
-                    break
-
-
-        #pool.close()
-        #pool.join()
-        end_generation_time = datetime.now()
-
-        # Print generation information
-        ESS = compute_effective_sample_size(weights)
-        elapsed_time = end_generation_time - start_generation_time
-        formatted_time = f"{elapsed_time.seconds // 3600:02}:{(elapsed_time.seconds % 3600) // 60:02}:{elapsed_time.seconds % 60:02}"
-        print(f"Generation {generation + 1}: Tolerance = {tolerance}, Accepted Particles = {len(new_particles)}/{total_simulations}, Time = {formatted_time}, ESS = {ESS}")
-
-        # Check if the tolerance is below the minimum
-        if tolerance < minimum_tolerance:
-            print(f"Minimum tolerance reached at generation {generation + 1}")
+        # Check if minimum tolerance is reached
+        if minimum_epsilon is not None and epsilon < minimum_epsilon:
+            print(f"Minimum epsilon reached at generation {gen + 1}")
             break
 
         # Check if the walltime has been reached
         if max_time is not None and datetime.now() - start_time > max_time:
-            print(f"Maximum time reached at generation {generation + 1}")
+            print(f"Maximum time reached at generation {gen + 1}")
             break
 
-        # Update particles and weights, before order new particles such that they are in the same order as the old particles
-        weights = compute_weights(new_particles, particles, weights, priors, cov_matrix, continuous_params, discrete_params, p_discrete_transition)
-        weights = np.ones(num_particles) / num_particles
-        particles = new_particles
+        # Check if the total simulations budget has been reached
+        if total_simulations_budget is not None and n_simulations > total_simulations_budget:
+            print(f"Total simulations budget reached at generation {gen + 1}")
+            break
 
-        # Update tolerance for the next generation
-        tolerance = weighted_quantile(distances, weights, tolerance_quantile)
+        # Update perturbations based on particles and weights
+        for perturbation in perturbations.values():
+            perturbation.update(particles, weights, param_names)
 
-    # Format output
-    results = CalibrationResults()
-    results.set_calibration_strategy("abc_smc")
+        new_particles, new_weights, new_distances, new_simulations = [], [], [], []
+        for _ in range(num_particles):
+            while True:
+                # Resample a particle based on weights
+                index = np.random.choice(len(particles), p=weights / weights.sum())
+                candidate_params = particles[index]
 
-    posterior_dict = {param: [sample[param] for sample in particles] for param in priors.keys()}
-    posterior_dict["weights"] = weights
-    results.set_posterior_distribution(pd.DataFrame(posterior_dict))
-    results.set_selected_trajectories(np.array(simulated_points))
-    results.set_data(observed_data)
+                # Propose new parameters (perturbation kernel)
+                perturbed_params = [
+                    perturbations[param_names[i]].propose(candidate_params[i]) for i in range(len(param_names))
+                ]
+                full_params = {**user_params, **dict(zip(param_names, perturbed_params))}
+
+                # Check if perturbed parameters have prior probability > 0
+                prior_probabilities = [
+                  priors[param].pdf(perturbed_params[i]) if param in continuous_params
+                  else priors[param].pmf(perturbed_params[i])
+                  for i, param in enumerate(param_names)
+                ]
+                if all(prob > 0 for prob in prior_probabilities):
+                    simulated_data = simulate_model(full_params)
+                    dist = distance_function(simulated_data, observed_data)
+                    n_simulations += 1
+
+                    if dist < epsilon:
+                        new_particles.append(perturbed_params)
+                        weight_numerator = np.prod([
+                          priors[param].pdf(perturbed_params[i]) if param in continuous_params
+                          else priors[param].pmf(perturbed_params[i])
+                          for i, param in enumerate(param_names)
+                        ])
+                        weight_denominator = np.sum([
+                            weights[j] * np.prod([
+                                perturbations[param_names[i]].pdf(
+                                    perturbed_params[i], particles[j][i]
+                                ) for i in range(len(param_names))
+                            ]) for j in range(len(particles))
+                        ])
+                        new_weights.append(weight_numerator / weight_denominator)
+                        new_distances.append(dist)
+                        new_simulations.append(simulated_data)
+                        break
+
+        # Normalize weights
+        new_weights = np.array(new_weights)
+        new_weights /= new_weights.sum()
+
+        particles = np.array(new_particles)
+        weights = new_weights
+        distances = np.array(new_distances)
+        simulations = np.array(new_simulations)
+
+        # Set the results for the generation
+        results.set_posterior_distribution(pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))}), generation=gen + 1)
+        results.set_distances(distances, generation=gen + 1)
+        results.set_weights(weights, generation=gen + 1)
+        results.set_selected_trajectories(simulations, generation=gen + 1)
+
+        # Print generation information
+        end_generation_time = datetime.now()
+        elapsed_time = end_generation_time - start_generation_time
+        formatted_time = f"{elapsed_time.seconds // 3600:02}:{(elapsed_time.seconds % 3600) // 60:02}:{elapsed_time.seconds % 60:02}"
+        print(f"\tElapsed time: {formatted_time}") 
+
+    # Complete the results object
+    results.set_observed_data(observed_data)
     results.set_priors(priors)
     results.set_calibration_params({
         "num_particles": num_particles,
-        "minimum_tolerance": minimum_tolerance,
+        "minimum_epsilon": minimum_epsilon,
         "distance_function": distance_function,
-        "max_generations": max_generations,
-        "max_time": max_time
+        "num_generations": num_generations,
+        "max_time": max_time, 
+        "total_simulations_budget": total_simulations_budget
     })
-    results.set_error_distribution(distances)
-    
-    if include_quantiles: 
-        # Compute quantiles 
-        selected_simulations_quantiles = compute_quantiles({"data": simulated_points}, simulation_dates=parameters[dates_column])
-        results.set_selected_quantiles(selected_simulations_quantiles)
-    
+
     return results
 
 
@@ -430,12 +349,11 @@ def calibration_abc_rejection(simulation_function: Callable,
                               priors: Dict[str, Any], 
                               parameters: Dict[str, Any], 
                               observed_data: Dict[str, Any],
-                              tolerance: float,
+                              epsilon: float,
                               distance_function: Callable[[Dict[str, Any], Any], float] = rmse,
-                              num_particles: int = 100,
-                              include_quantiles: bool = True, 
-                              dates_column: str = "simulation_dates", 
-                              n_jobs: int = -1) -> CalibrationResults:
+                              num_particles: int = 100, 
+                              max_time=None, 
+                              total_simulations_budget=None) -> CalibrationResults:
     """
     Calibrates the model using Approximate Bayesian Computation (ABC) rejection sampling.
 
@@ -454,65 +372,52 @@ def calibration_abc_rejection(simulation_function: Callable,
     Returns:
         CalibrationResults: An object containing the results of the calibration, including the posterior distribution, selected trajectories, and quantiles.
     """
-            
-    accepted_params = {p: [] for p in priors.keys()}
-    accepted_errors, accepted_simulations = [], []
 
-    # Parallel processing setup
-    def init_worker():
-        # Seed the NumPy random number generator based on the process ID and current time
-        np.random.seed(os.getpid() + int(time.time() * 1000) % 1000000)
+    simulations, distances = [], []
+    sampled_params = {p: [] for p in priors.keys()}
 
-    def worker(_):
-        simulation_params = parameters.copy()
+    # Parameter names for consistent indexing
+    param_names = list(priors.keys())
 
-        # sample
-        sampled_params = {}
-        for param, distr in priors.items():
-            rv = distr.rvs(random_state=np.random)
-            sampled_params[param] = rv
-            simulation_params[param] = rv
+    start_time = datetime.now()
+    n_simulations = 0 # Counter for total number of simulations
+    while len(distances) < num_particles: 
+        params = sample_prior(priors, param_names)
+        full_params = {**parameters, **dict(zip(param_names, params))}
+        results = simulation_function(full_params)
+        distance = distance_function(data=observed_data, simulation=results)
+        if distance < epsilon:
+            simulations.append(results)
+            distances.append(distance)
+            for i, p in enumerate(param_names):
+                sampled_params[p].append(params[i])
 
-        # simulate
-        results = simulation_function(simulation_params)
-        error = distance_function(data=observed_data, simulation=results)
-        return results, error, sampled_params
-    
-    if n_jobs == -1:
-        n_jobs = cpu_count()
-    pool = Pool(n_jobs, initializer=init_worker)
+        n_simulations += 1
 
-    while len(accepted_errors) < num_particles:        
-        results_list = pool.map(worker, range(n_jobs))
-        for results, error, sampled_params in results_list:
-            if error < tolerance: 
-                for p in accepted_params.keys(): 
-                    accepted_params[p].append(sampled_params[p])
-                accepted_errors.append(error)
-                accepted_simulations.append(results)
+        # Check if the walltime has been reached
+        if max_time is not None and datetime.now() - start_time > max_time:
+            print(f"Maximum time reached")
+            break
 
-    # format simulation results
-    accepted_simulations_formatted = {}
-    for res in accepted_simulations:
-        accepted_simulations_formatted = combine_simulation_outputs(accepted_simulations_formatted, res)
+        # Check if the total simulations budget has been reached
+        if total_simulations_budget is not None and n_simulations > total_simulations_budget:
+            print(f"Total simulations budget reached")
+            break
 
     # format results 
     results = CalibrationResults()
     results.set_calibration_strategy("abc_rejection")
-    results.set_posterior_distribution(pd.DataFrame(data=accepted_params))
-    results.set_selected_trajectories(np.array([el["data"] for el in accepted_simulations]))
-    results.set_data(observed_data)
+    results.set_posterior_distribution(pd.DataFrame(data=sampled_params), generation=0)
+    results.set_selected_trajectories(simulations, generation=0)
+    results.set_distances(np.array(distances), generation=0)
+    results.set_observed_data(observed_data)
     results.set_priors(priors)
-    results.set_calibration_params({"tolerance": tolerance, 
+    results.set_calibration_params({"epsilon": epsilon,
                                     "distance_function": distance_function, 
-                                    "num_particles": num_particles})
-    results.set_error_distribution(np.array(accepted_errors))
-
-    if include_quantiles: 
-        # compute quantiles 
-        selected_simulations_quantiles = compute_quantiles(accepted_simulations_formatted, simulation_dates=parameters[dates_column])
-        results.set_selected_quantiles(selected_simulations_quantiles)
-
+                                    "num_particles": num_particles, 
+                                    "max_time": max_time,
+                                    "total_simulations_budget": total_simulations_budget})
+    
     return results
 
 
