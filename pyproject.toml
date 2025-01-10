@@ -33,14 +33,10 @@ repository = "https://github.com/ngozzi/epydemix"
 documentation = "https://github.com/ngozzi/epydemix"
 
 [tool.setuptools]
-# Options for setuptools (optional)
+# Use the find_packages mechanism with proper configuration
 package-dir = { "" = "src" }  
-packages = ["find:"]
+packages = { find = { where = ["src"] } }
 include-package-data = true
-
-[tool.setuptools.packages.find]
-# Configuration for find_packages
-where = ["src"]  # Look for packages in src/
 
 [tool.pytest.ini_options]
 # pytest configuration 
