@@ -13,7 +13,7 @@ def calibrate(strategy: str,
               priors: Dict[str, Any], 
               parameters: Dict[str, Any], 
               observed_data: Dict[str, Any], 
-              top_quantile: float = 0.05, 
+              top_fraction: float = 0.05, 
               Nsim : int = 100, 
               epsilon: float = 0.1,
               num_particles: int = 1000, 
@@ -26,45 +26,37 @@ def calibrate(strategy: str,
               epsilon_schedule = None, 
               perturbations = None) -> CalibrationResults:
     """
-    Unified calibration function to handle top percentage, ABC rejection, and ABC SMC methods.
+    Unified calibration function to handle top fraction, ABC rejection, and ABC SMC methods.
     
     Args:
-        strategy (str): The calibration strategy to use ("top_perc", "abc_rejection", or "abc_smc").
+        strategy (str): The calibration strategy to use ("abc_top_fraction", "abc_rejection", or "abc_smc").
         simulation_function (Callable[[Dict[str, Any]], Any]): The function that runs the simulation, which takes the parameters dictionary as input.
         priors (Dict[str, Any]): A dictionary of prior distributions for the parameters.
         parameters (Dict[str, Any]): A dictionary of parameters used in the simulation.
-        observed_data (Dict[str, Any]): A dictionary containing the observed data.
-        Nsim (int, optional): The number of simulation runs to perform in top_perc approach (default is 100).
-        top_perc (float, optional): Top percentage of simulations to select based on error metric (used in "top_perc").
-        tolerance (float, optional): Error tolerance for rejection sampling (used in "abc_rejection").
+        observed_data (Dict[str, Any]): A dictionary containing the observed data. Key must be "data".
+        top_fraction (float, optional): Top fraction of simulations to select based on error metric (used in "abc_top_fraction").
+        Nsim (int, optional): The number of simulation runs to perform in "abc_top_fraction" approach (default is 100).
+        epsilon (float, optional): Error tolerance for rejection sampling (used in "abc_rejection").
+        num_particles (int, optional): Number of particles for "abc_rejection" and "abc_smc" approach (default is 1000).
         distance_function (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
-        include_quantiles (bool, optional): Whether to compute and include quantiles in the results (default is True).
-        dates_column (str, optional): The key used for simulation dates in the parameters (default is "simulation_dates").
-        num_particles (int, optional): Number of particles for ABC SMC and ABC rejection (default is 1000).
-        distance_function (Callable[[Dict[str, Any], Any], float], optional): The distance function used to measure the distance between observed and simulated data (default is rmse).
-        n_jobs (int, optional): Number of parallel jobs to run during ABC SMC calibration. Default is -1 (uses all available CPUs).
-
-        Arguments for "abc_smc":
-            perturbation_kernel (Callable, optional): Perturbation kernel for ABC SMC (default is default_perturbation_kernel).
-            p_discrete_transition (float, optional): The transition probability for discrete parameters (default is 0.3).
-            max_generations (int, optional): Maximum number of generations for ABC SMC (default is 10).
-            tolerance_quantile (float, optional): Quantile to reduce the tolerance by in ABC SMC (default is 0.50).
-            minimum_tolerance (float, optional): Minimum tolerance for ABC SMC (default is 0.15).
-            max_time (Optional[timedelta], optional): Maximum time allowed for ABC SMC calibration (default is None).
-            scaling_factor (float, optional): Scaling factor for ABC SMC covariance matrix (default is 1.0).
-            apply_bandwidth (bool, optional): Whether to apply bandwidth scaling to covariance matrix (default is True).
-            
-    
+        max_generations (int, optional): Maximum number of generations for ABC SMC (used in "abc_smc" approach).
+        epsilon_quantile_level (float, optional): Quantile level to set next generation's epsilon (used in "abc_smc" approach).
+        minimum_epsilon (float, optional): Minimum tolerance for ABC SMC (used in "abc_smc" approach).
+        max_time (Optional[timedelta], optional): Maximum time allowed for ABC SMC calibration (used in "abc_smc" approach).
+        total_simulations_budget (Optional[int], optional): Maximum number of simulations allowed for ABC SMC calibration (used in "abc_smc" approach).
+        epsilon_schedule (Optional[List[float]], optional): List of epsilon thresholds for each generation (used in "abc_smc" approach).
+        perturbations (Optional[Dict[str, Any]], optional): Dictionary of parameter_name -> Perturbation objects (used in "abc_smc" approach).
+        
     Returns:
         CalibrationResults: The results of the calibration, including posterior distributions and selected simulations.
     """
     
-    if strategy == "abc_top_quantile":
-        return calibration_abc_top_quantile(simulation_function=simulation_function, 
+    if strategy == "abc_top_fraction":
+        return calibration_abc_top_fraction(simulation_function=simulation_function, 
                                     priors=priors, 
                                     parameters=parameters, 
                                     observed_data=observed_data, 
-                                    top_quantile=top_quantile, 
+                                    top_fraction=top_fraction, 
                                     distance_function=distance_function, 
                                     Nsim=Nsim)
     
@@ -98,13 +90,13 @@ def calibrate(strategy: str,
         raise ValueError(f"Unsupported calibration strategy: {strategy}")
 
 
-def calibration_abc_top_quantile(simulation_function: Callable, 
-                         priors: Dict[str, Any], 
-                         parameters: Dict[str, Any], 
-                         observed_data: Dict[str, Any],
-                         top_quantile: float = 0.05,
-                         distance_function: Callable[[Dict[str, Any], Any], float] = rmse,
-                         Nsim: int = 100) -> CalibrationResults:
+def calibration_abc_top_fraction(simulation_function: Callable, 
+                                 priors: Dict[str, Any], 
+                                 parameters: Dict[str, Any], 
+                                 observed_data: Dict[str, Any],
+                                 top_fraction: float = 0.05,
+                                 distance_function: Callable[[Dict[str, Any], Any], float] = rmse,
+                                 Nsim: int = 100) -> CalibrationResults:
     """
     Calibrates the model by selecting the top percentage of simulations based on the chosen error metric.
 
@@ -139,7 +131,7 @@ def calibration_abc_top_quantile(simulation_function: Callable,
             sampled_params[p].append(params[i])
 
     # Compute distance threshold
-    distance_threshold = np.quantile(distances, q=top_quantile)
+    distance_threshold = np.quantile(distances, q=top_fraction)
     idxs = np.argwhere(np.array(distances) <= distance_threshold).ravel()
 
     # select runs and parameters
@@ -148,13 +140,13 @@ def calibration_abc_top_quantile(simulation_function: Callable,
 
     # format results 
     results = CalibrationResults()
-    results.set_calibration_strategy("abc_top_quantile")
+    results.set_calibration_strategy("abc_top_fraction")
     results.set_posterior_distribution(pd.DataFrame(data=selected_params), generation=0)
     results.set_selected_trajectories(selected_simulations, generation=0)
     results.set_distances(np.array(distances)[idxs], generation=0)
     results.set_observed_data(observed_data)
     results.set_priors(priors)
-    results.set_calibration_params({"top_quantile": top_quantile, 
+    results.set_calibration_params({"top_fraction": top_fraction, 
                                     "distance_function": distance_function, 
                                     "Nsim": Nsim})
     return results

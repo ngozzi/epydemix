@@ -8,7 +8,6 @@ from datetime import timedelta
 from .population import Population, load_epydemix_population
 import copy
 from typing import List, Dict, Optional, Union, Any, Callable
-from multiprocess import Pool, cpu_count
 
 
 class EpiModel:
@@ -720,14 +719,15 @@ class EpiModel:
     def run_simulations(self, 
                         start_date: Union[str, pd.Timestamp] = "2020-01-01", 
                         end_date: Union[str, pd.Timestamp] = "2020-12-31", 
-                        initial_conditions_dict: Optional[Dict[str, np.ndarray]] = None,
-                        steps: Union[int, str] = "daily", 
+                        initial_conditions_dict: Optional[Dict[str, np.ndarray]] = None, 
                         Nsim: int = 100, 
                         quantiles: Optional[List[float]] = None, 
                         post_processing_function: Callable = lambda x: x, 
                         ppfun_args: Optional[Dict] = None, 
                         percentage_in_agents: float = 0.01,
-                        n_jobs: int = -1,
+                        dt: Optional[float] = 1.,
+                        resample_frequency: Optional[str] = "D",
+                        resample_aggregation: Optional[Union[str, dict]] = "last",
                         **kwargs) -> SimulationResults:
         """
         Simulates the epidemic model over the given time period in parallel.
@@ -736,13 +736,14 @@ class EpiModel:
             start_date (str or pd.Timestamp): The start date of the simulation. Default is "2020-01-01".
             end_date (str or pd.Timestamp): The end date of the simulation. Default is "2020-12-31".
             initial_conditions_dict (dict, optional): A dictionary of initial conditions for the simulation.
-            steps (int or str, optional): The number of time steps or step frequency (default is "daily").
             Nsim (int, optional): The number of simulation runs to perform (default is 100).
             quantiles (list of float, optional): A list of quantiles to compute for the simulation results.
             post_processing_function (callable, optional): A function to apply to each simulation output for post-processing.
             ppfun_args (dict, optional): Arguments to pass to the post-processing function.
             percentage_in_agents (float, optional): The percentage of the population to initialize in the agents compartment.
-            n_jobs (int, optional): The number of processes to use for parallelization. Default is -1 (uses all available CPUs).
+            dt (float, optional): The time step for the simulation, expressed in days. Default is 1 (day).
+            resample_frequency (str, optional): The frequency at which to resample the simulation results. Default is "D" (daily).
+            resample_aggregation (str, optional): The aggregation method to use when resampling the simulation results. Default is "sum".
             **kwargs: Additional arguments to pass to the stochastic simulation function.
 
         Returns:
@@ -756,32 +757,23 @@ class EpiModel:
             ppfun_args = {}
 
         # Compute the simulation dates
-        simulation_dates = compute_simulation_dates(start_date, end_date, steps=steps)
+        total_days = len(pd.date_range(start_date, end_date, freq="D"))
+        simulation_dates = compute_simulation_dates(start_date, end_date, steps=int(1 / dt) * total_days)
 
         # Compute initial conditions if needed
         if initial_conditions_dict is None:
             initial_conditions_dict = self.create_default_initial_conditions(percentage_in_agents=percentage_in_agents)
 
-        # Define the worker function for multiprocessing
-        def worker(_):
-            return simulate(self, simulation_dates, post_processing_function=post_processing_function, 
-                            ppfun_args=ppfun_args, initial_conditions_dict=initial_conditions_dict, **kwargs)
-
-        # Use multiprocessing to run simulations in parallel
-        if n_jobs == -1:
-            n_jobs = cpu_count()
-        
-        with Pool(processes=n_jobs) as pool:
-            results_list = pool.map(worker, range(Nsim))
-
-        # Combine the results from all simulations
+        # Simulate and concatenate results from multiple runs 
         simulated_compartments = {}
-        for results in results_list:
+        for _ in range(Nsim):
+            results = simulate(self, simulation_dates, dt=dt, post_processing_function=post_processing_function, ppfun_args=ppfun_args, initial_conditions_dict=initial_conditions_dict, **kwargs)
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
         # Convert results to NumPy arrays and compute quantiles
         simulated_compartments = {k: np.array(v) for k, v in simulated_compartments.items()}
-        df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles)
+        df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles, 
+                                         resample_frequency=resample_frequency, resample_aggregation=resample_aggregation)
 
         # Format and return simulation results
         simulation_results = SimulationResults()
@@ -797,6 +789,7 @@ class EpiModel:
 def simulate(epimodel, 
              simulation_dates: List[pd.Timestamp], 
              initial_conditions_dict: Optional[Dict[str, np.ndarray]],
+             dt : float = 1.,
              post_processing_function: Callable = lambda x: x, 
              ppfun_args: Optional[Dict] = None, 
              **kwargs) -> Dict:
@@ -807,6 +800,7 @@ def simulate(epimodel,
         epimodel (EpiModel): The epidemic model instance to simulate.
         simulation_dates (list of pd.Timestamp): The list of dates over which to run the simulation.
         initial_conditions_dict (dict, optional): A dictionary of initial conditions for the simulation.
+        dt (float, optional): The time step for the simulation, expressed in days. Default is 1 (day).
         post_processing_function (callable, optional): A function to apply to the results after the simulation. 
             Default is an identity function.
         ppfun_args (dict, optional): Arguments to pass to the post-processing function. Default is an empty dictionary.
@@ -829,7 +823,7 @@ def simulate(epimodel,
     # Compute the contact reductions based on the interventions
     epimodel.compute_contact_reductions(simulation_dates)
 
-    # Overwrite parameters if any are provided via kwargs
+    # Overwrite parameters if any are provided via kwargs (needed for calibration purposes)
     for k, v in kwargs.items():
         if k in epimodel.parameters:
             epimodel.parameters[k] = v
@@ -842,7 +836,7 @@ def simulate(epimodel,
     initial_conditions = apply_initial_conditions(epimodel, initial_conditions_dict)
 
     # Run the stochastic simulation
-    compartments_evolution = stochastic_simulation(simulation_dates, epimodel, epimodel.definitions, initial_conditions)
+    compartments_evolution = stochastic_simulation(simulation_dates, epimodel, epimodel.definitions, initial_conditions, dt=dt)
 
     # Format the simulation output
     results = format_simulation_output(np.array(compartments_evolution)[1:], epimodel.compartments_idx, epimodel.population.Nk_names)
@@ -856,7 +850,8 @@ def simulate(epimodel,
 def stochastic_simulation(simulation_dates: List[pd.Timestamp], 
                           epimodel, 
                           parameters: Dict, 
-                          initial_conditions: np.ndarray) -> np.ndarray:
+                          initial_conditions: np.ndarray, 
+                          dt : float) -> np.ndarray:
     """
     Run a stochastic simulation of the epidemic model over the specified time period.
 
@@ -865,15 +860,13 @@ def stochastic_simulation(simulation_dates: List[pd.Timestamp],
         epimodel (EpiModel): The epidemic model containing compartments, contact matrices, and transitions.
         parameters (dict): A dictionary of model parameters used during the simulation.
         initial_conditions (np.ndarray): An array representing the initial population distribution across compartments and demographic groups.
+        dt (float): The time step for the simulation, expressed in days.
 
     Returns:
         np.ndarray: A 3D array representing the evolution of compartment populations over time. The shape of the 
                     array is (time_steps, num_compartments, num_demographic_groups).
     """
     compartments_evolution = [initial_conditions]
-
-    # Compute the time step (dt) based on simulation dates
-    dt = np.diff(simulation_dates)[0] / timedelta(days=1)
 
     # Simulate each time step
     for i, date in enumerate(simulation_dates):
