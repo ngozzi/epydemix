@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="epydemix",  
-    version="0.1.0",  
+    version="1.0.0",  
     author="Nicolò Gozzi",  
     author_email="nic.gozzi@gmail.com",  
     description="A Python package for epidemic modeling, simulation, and calibration",  
@@ -24,7 +24,6 @@ setup(
     install_requires=[
         "evalidate>=2.0.3",
         "matplotlib>=3.7.3",
-        "multiprocess>=0.70.16",
         "numpy>=1.23.5",
         "pandas>=2.0.3",
         "scipy>=1.10.1",

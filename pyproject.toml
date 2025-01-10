@@ -1,0 +1,64 @@
+[build-system]
+# Specifies the build tools and their versions required to build the project
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Basic package metadata
+name = "epydemix" 
+version = "1.0.0" 
+description = "A Python package for epidemic modeling, simulation, and calibration"
+authors = [
+    { name = "Nicolò Gozzi", email = "nic.gozzi@gmail.com" }
+]
+readme = "README.md" 
+license = { file = "LICENSE" } 
+requires-python = ">=3.6"  # Minimum Python version required
+
+# Dependencies your package needs
+dependencies = [
+    "evalidate>=2.0.3",
+    "matplotlib>=3.7.3",
+    "numpy>=1.23.5",
+    "pandas>=2.0.3",
+    "scipy>=1.10.1",
+    "seaborn>=0.13.2",
+    "setuptools>=68.2.0"
+]
+
+[project.urls]
+# Optional links related to your project
+homepage = "https://github.com/ngozzi/epydemix"  
+repository = "https://github.com/ngozzi/epydemix"
+documentation = "https://github.com/ngozzi/epydemix"
+
+[tool.setuptools]
+# Options for setuptools (optional)
+package-dir = { "" = "src" }  
+packages = ["find:"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+# Configuration for find_packages
+where = ["src"]  # Look for packages in src/
+
+[tool.pytest.ini_options]
+# pytest configuration 
+minversion = "6.0"
+addopts = "--strict-markers"
+testpaths = ["tests"]  # Directory containing tests
+
+[tool.pylint]
+# Pylint configuration 
+disable = [
+    "C0103",  # Disable specific linting rules
+]
+
+[tool.black]
+# Black configuration 
+line-length = 88
+target-version = ["py37"]
+
+[tool.isort]
+# isort configuration (for import sorting)
+profile = "black"
