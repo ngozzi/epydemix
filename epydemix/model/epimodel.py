@@ -8,7 +8,6 @@ from datetime import timedelta
 from .population import Population, load_epydemix_population
 import copy
 from typing import List, Dict, Optional, Union, Any, Callable
-from multiprocess import Pool, cpu_count
 
 
 class EpiModel:
@@ -727,7 +726,6 @@ class EpiModel:
                         post_processing_function: Callable = lambda x: x, 
                         ppfun_args: Optional[Dict] = None, 
                         percentage_in_agents: float = 0.01,
-                        n_jobs: int = -1,
                         **kwargs) -> SimulationResults:
         """
         Simulates the epidemic model over the given time period in parallel.
@@ -762,21 +760,10 @@ class EpiModel:
         if initial_conditions_dict is None:
             initial_conditions_dict = self.create_default_initial_conditions(percentage_in_agents=percentage_in_agents)
 
-        # Define the worker function for multiprocessing
-        def worker(_):
-            return simulate(self, simulation_dates, post_processing_function=post_processing_function, 
-                            ppfun_args=ppfun_args, initial_conditions_dict=initial_conditions_dict, **kwargs)
-
-        # Use multiprocessing to run simulations in parallel
-        if n_jobs == -1:
-            n_jobs = cpu_count()
-        
-        with Pool(processes=n_jobs) as pool:
-            results_list = pool.map(worker, range(Nsim))
-
-        # Combine the results from all simulations
+        # Simulate and concatenate results from multiple runs 
         simulated_compartments = {}
-        for results in results_list:
+        for _ in range(Nsim):
+            results = simulate(self, simulation_dates, post_processing_function=post_processing_function, ppfun_args=ppfun_args, initial_conditions_dict=initial_conditions_dict, **kwargs)
             simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
 
         # Convert results to NumPy arrays and compute quantiles
