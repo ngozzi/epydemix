@@ -116,7 +116,9 @@ def compute_quantiles(
         data: Dict[str, np.ndarray],
         simulation_dates: List[Union[str, pd.Timestamp]],
         axis: int = 0,
-        quantiles: List[float] = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]
+        quantiles: List[float] = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975],
+        resample_frequency: Optional[str] = "D", 
+        resample_aggregation: str = "last"
     ) -> pd.DataFrame:
     """
     Computes the specified quantiles for each key in the provided data over the given dates.
@@ -129,6 +131,70 @@ def compute_quantiles(
         axis (int, optional): The axis along which to compute the quantiles (default is 0).
         quantiles (List[float], optional): A list of quantiles to compute for the simulation results 
                                             (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
+        resample_frequency (str, optional): A Pandas-compatible frequency string (e.g., 'W', 'M') 
+                                            for resampling the data before computing quantiles. Default is 'D'.
+        resample_aggregation (str, optional): The aggregation method to use when resampling the data. Default is 'sum'.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the quantile values for each data category and date.
+                      The DataFrame has columns for the data category, quantile, and date.
+    """
+    # Ensure simulation_dates are a Pandas DatetimeIndex
+    simulation_dates = pd.to_datetime(simulation_dates)
+    dict_quantiles = {k: [] for k in data.keys()}
+    dict_quantiles["quantile"] = []
+    dict_quantiles["date"] = []
+
+    # Resample the data if resample_frequency is specified
+    if resample_frequency:
+        resampled_data = {}
+        resampled_dates = []
+        for k, v in data.items():
+            # Create a temporary DataFrame for resampling
+            temp_df = pd.DataFrame(v.T, index=simulation_dates)
+            # Resample and take the mean (you can customize aggregation here)
+            resampled_temp_df = temp_df.resample(resample_frequency).agg(resample_aggregation)
+            # Fill nan values 
+            resampled_temp_df = resampled_temp_df.fillna(method='ffill')
+            resampled_data[k] = resampled_temp_df.values.T
+            resampled_dates = resampled_temp_df.index  # Same for all keys
+        data = resampled_data
+        simulation_dates = resampled_dates
+
+    # Compute quantiles
+    for q in quantiles:
+        for k, v in data.items():
+            arrq = np.quantile(v, axis=axis, q=q)
+            dict_quantiles[k].extend(arrq)
+        dict_quantiles["quantile"].extend([q] * len(arrq))
+        dict_quantiles["date"].extend(simulation_dates)
+
+    df_quantile = pd.DataFrame(data=dict_quantiles)
+    return df_quantile
+
+
+def compute_quantiles_old(
+        data: Dict[str, np.ndarray],
+        simulation_dates: List[Union[str, pd.Timestamp]],
+        axis: int = 0,
+        quantiles: List[float] = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975], 
+        resample_frequency: Optional[str] = "D", 
+        resample_aggregation: Optional[Union[str, dict]] = "last"
+    ) -> pd.DataFrame:
+    """
+    Computes the specified quantiles for each key in the provided data over the given dates.
+
+    Args:
+        data (Dict[str, np.ndarray]): A dictionary where keys represent different data categories 
+                                      (e.g., compartments, demographic groups) and values are arrays 
+                                      containing the simulation results.
+        simulation_dates (List[Union[str, pd.Timestamp]]): The dates corresponding to the simulation time steps.
+        axis (int, optional): The axis along which to compute the quantiles (default is 0).
+        quantiles (List[float], optional): A list of quantiles to compute for the simulation results 
+                                            (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
+        resample_frequency (str, optional): A Pandas-compatible frequency string (e.g., 'W', 'M') 
+                                            for resampling the data before computing quantiles. Default is 'D'.
+        resample_aggregation (str, optional): The aggregation method to use when resampling the data. Default is 'sum'.
 
     Returns:
         pd.DataFrame: A DataFrame containing the quantile values for each data category and date.
@@ -144,8 +210,10 @@ def compute_quantiles(
             dict_quantiles[k].extend(arrq)
         dict_quantiles["quantile"].extend([q] * len(arrq))
         dict_quantiles["date"].extend(simulation_dates)
-
     df_quantile = pd.DataFrame(data=dict_quantiles) 
+
+    # Resample to the specified frequency
+    #df_quantile = df_quantile.resample(resample_frequency, on='date').agg(resample_aggregation)
     return df_quantile
 
 
@@ -316,29 +384,28 @@ def evaluate(expr: str, env: dict) -> any:
 
     Raises:
         EvalException: If there is an error in evaluating the expression, such as an invalid 
-                        operation or an undefined variable.
+                       operation or an undefined variable.
     """
     eval_model = base_eval_model
     eval_model.nodes.extend(['Mult', 'Pow'])
     return Expr(expr, model=eval_model).eval(env)
 
 
-def compute_simulation_dates(start_date: str, end_date: str, steps: str = "daily") -> list:
+def compute_simulation_dates(start_date: str, end_date: str, steps: Optional[int] = None) -> list:
     """
     Computes a list of simulation dates based on the specified frequency or number of periods.
 
     Args:
         start_date (str): The start date for the simulation, formatted as "YYYY-MM-DD".
         end_date (str): The end date for the simulation, formatted as "YYYY-MM-DD".
-        steps (str or int, optional): If "daily", generates a date range with daily frequency. 
-                                      If an integer, generates a date range with the specified number 
-                                      of periods. Defaults to "daily".
+        steps (int, optional): If None, generates a date range with daily frequency. 
+                               If an integer, generates a date range with the specified number of periods. Defaults to None.
 
     Returns:
         list: A list of dates between `start_date` and `end_date` based on the specified frequency or 
               number of periods. The list is formatted as `datetime.date` objects.
     """
-    if steps == "daily":
+    if steps is None:
         simulation_dates = pd.date_range(start=start_date, end=end_date, freq="d").tolist()
     else: 
         simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
