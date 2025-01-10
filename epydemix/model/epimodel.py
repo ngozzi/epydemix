@@ -4,8 +4,7 @@ from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
-from datetime import timedelta
-from .population import Population, load_epydemix_population
+from ..population.population import Population, load_epydemix_population
 import copy
 from typing import List, Dict, Optional, Union, Any, Callable
 
