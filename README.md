@@ -22,9 +22,6 @@ To install the latest version of `epydemix` from TestPyPI, use the following com
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ epydemix
 ```
 
-- **`--index-url`**: Specifies TestPyPI as the source for the package.
-- **`--extra-index-url`**: Ensures dependencies not on TestPyPI are fetched from the official PyPI repository.
-
 ---
 
 ### From PyPI (Coming Soon)
@@ -50,7 +47,7 @@ pip install -e .
 
 ## Quick Start
 
-Once installed, you can start using **Epydemix** in your Python scripts or Jupyter notebooks. Below an example to get started.
+Once installed, you can start using **epydemix** in your Python scripts or Jupyter notebooks. Below an example to get started.
 
 ### Example: Creating and running a simple SIR model
 
@@ -72,7 +69,7 @@ plot_quantiles(results, columns=["I_total", "S_total", "R_total"])
 
 ## Epydemix Data
 
-**Epydemix** also provides access to a wealth of real-world population and contact matrix data through the [**epydemix_data**](https://github.com/ngozzi/epydemix-data/tree/main) module. This dataset allows you to load predefined population structures, including age distribution and contact matrices for over 400 locations globally. You can use this data to create realistic simulations of disease spread in different geographies.
+**epydemix** also provides access to a wealth of real-world population and contact matrix data through the [**epydemix_data**](https://github.com/ngozzi/epydemix-data/) module. This dataset allows you to load predefined population structures, including age distribution and contact matrices for over 400 locations globally. You can use this data to create realistic simulations of disease spread in different geographies.
 
 ### Example of Loading Population Data
 
@@ -92,7 +89,7 @@ model.set_population(population=population)
 
 Epydemix can load data either locally from a folder or directly from online sources, making it easy to simulate a wide range of epidemic models on real population data.
 
-For more information about the available population and contact matrices and to download the data, please visit the [dedicated repository](https://github.com/ngozzi/epydemix-data/tree/main).
+For more information about the available population and contact matrices and to download the data, please visit the [dedicated repository](https://github.com/ngozzi/epydemix-data/).
 
 
 ### Main Modules
@@ -102,16 +99,6 @@ For more information about the available population and contact matrices and to 
 - **`epydemix.visualization`**: Visualization functions for plotting simulation results.
 - **`epydemix.utils`**: Utility functions and additional tools.
 
-
-## Contributing
-
-Contributions are welcome! If you would like to contribute, please:
-
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature/my-feature`).
-3. Commit your changes (`git commit -am 'Add new feature'`).
-4. Push to the branch (`git push origin feature/my-feature`).
-5. Create a new Pull Request.
 
 ## License
 
