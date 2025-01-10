@@ -14,28 +14,38 @@
 
 ## Installation
 
-You can install **Epydemix** locally for development using `pip`:
+### From TestPyPI (For Testing Purposes)
 
-1. Clone the repository:
+To install the latest version of `epydemix` from TestPyPI, use the following command:
 
-   ```bash
-   git clone https://github.com/ngozzi/epydemix.git
-   ```
+```bash
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ epydemix
+```
 
-2. Navigate to the project directory:
+- **`--index-url`**: Specifies TestPyPI as the source for the package.
+- **`--extra-index-url`**: Ensures dependencies not on TestPyPI are fetched from the official PyPI repository.
 
-   ```bash
-   cd epydemix
-   ```
+---
 
-3. Install the package in editable mode:
+### From PyPI (Coming Soon)
 
-   ```bash
-   pip install -e .
-   ```
+Once the package is released on the official PyPI repository, you can install it with:
 
-This will install the package and its dependencies, allowing you to make changes and immediately see the effects without needing to reinstall.
-See [requirements.txt](https://github.com/ngozzi/epydemix/blob/main/requirements.txt)
+```bash
+pip install epydemix
+```
+
+---
+
+### Optional: Installing for Development
+
+If you plan to contribute or modify the package, you can install it in editable mode:
+
+```bash
+git clone https://github.com/ngozzi/epydemix.git
+cd epydemix
+pip install -e .
+```
 
 
 ## Quick Start
