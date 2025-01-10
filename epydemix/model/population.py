@@ -362,7 +362,7 @@ def load_epydemix_population(
             layers: List[str] = ["school", "work", "home", "community"],
             age_group_mapping: Optional[Dict[str, List[str]]] = None,
             supported_contacts_sources: List[str] = ["prem_2017", "prem_2021", "mistry_2021"],
-            path_to_data_github: str = "https://raw.githubusercontent.com/ngozzi/epydemix/main/epydemix_data/") -> 'Population':
+            path_to_data_github: str = "https://raw.githubusercontent.com/ngozzi/epydemix-data/main/") -> 'Population':
     """
     Loads population and contact matrix data for a specified population.
 
@@ -397,7 +397,7 @@ def load_epydemix_population(
     validate_contacts_source(contacts_source, supported_contacts_sources)
 
     # load the demographic data
-    Nk = pd.read_csv(os.path.join(path_to_data, population_name, "demographic/age_distribution.csv"))
+    Nk = pd.read_csv(os.path.join(path_to_data, "data", population_name, "demographic/age_distribution.csv"))
     
     # if contact matrices are from Prem et al 2017 or Prem et al 2021 we need to aggregate population data
     if contacts_source in ["prem_2017", "prem_2021"]: 
@@ -419,7 +419,7 @@ def load_epydemix_population(
 
     # load the contact matrices
     for layer_name in layers:
-        C = pd.read_csv(os.path.join(path_to_data, population_name, "contact_matrices", contacts_source, f"contacts_matrix_{layer_name}.csv"), header=None).values
+        C = pd.read_csv(os.path.join(path_to_data, "data", population_name, "contact_matrices", contacts_source, f"contacts_matrix_{layer_name}.csv"), header=None).values
 
         # aggregate contact matrices to new age groups
         C_aggr = aggregate_matrix(C, 
