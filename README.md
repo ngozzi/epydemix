@@ -62,7 +62,7 @@ plot_quantiles(results, columns=["I_total", "S_total", "R_total"])
 
 ## Epydemix Data
 
-**Epydemix** also provides access to a wealth of real-world population and contact matrix data through the **epydemix_data** module. This dataset allows you to load predefined population structures, including age distribution and contact matrices for over 400 locations globally. You can use this data to create realistic simulations of disease spread in different geographies.
+**Epydemix** also provides access to a wealth of real-world population and contact matrix data through the [**epydemix_data**](https://github.com/ngozzi/epydemix-data/tree/main) module. This dataset allows you to load predefined population structures, including age distribution and contact matrices for over 400 locations globally. You can use this data to create realistic simulations of disease spread in different geographies.
 
 ### Example of Loading Population Data
 
@@ -82,7 +82,7 @@ model.set_population(population=population)
 
 Epydemix can load data either locally from a folder or directly from online sources, making it easy to simulate a wide range of epidemic models on real population data.
 
-For more information about the available population data and contact matrices, please refer to the [locations.csv](https://github.com/ngozzi/epydemix/blob/main/epydemix_data/locations.csv) file, and see the [epydemix_data README](https://github.com/ngozzi/epydemix/blob/main/epydemix_data/README.md) for further details.
+For more information about the available population and contact matrices and to download the data, please visit the [dedicated repository](https://github.com/ngozzi/epydemix-data/tree/main).
 
 
 ### Main Modules
