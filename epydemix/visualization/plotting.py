@@ -5,7 +5,6 @@ import pandas as pd
 from typing import List, Optional, Union, Any
 
 
-
 def get_timeseries_data(df_quantiles: pd.DataFrame, 
                         column: str, 
                         quantile: float) -> pd.DataFrame:

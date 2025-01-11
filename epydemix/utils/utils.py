@@ -227,6 +227,9 @@ def combine_simulation_outputs(
                     combined_simulation_outputs[key].append(simulation_outputs[key])
                 else:
                     combined_simulation_outputs[key] = [simulation_outputs[key]]
+    # cast lists to arrays
+    for key in combined_simulation_outputs:
+        combined_simulation_outputs[key] = np.array(combined_simulation_outputs[key])
     return combined_simulation_outputs
 
 

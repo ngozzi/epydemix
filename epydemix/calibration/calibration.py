@@ -159,6 +159,9 @@ def calibration_abc_top_fraction(simulation_function: Callable,
     selected_simulations = np.array(simulations)[idxs]
     selected_params = {p: np.array(arr)[idxs] for p, arr in sampled_params.items()}
 
+    # format selected simulations 
+    selected_simulations = combine_simulation_outputs(selected_simulations)
+
     # format results 
     results = CalibrationResults()
     results.set_calibration_strategy("abc_top_fraction")
@@ -240,6 +243,9 @@ def calibration_abc_smc(observed_data,
     weights = np.array(weights)
     distances = np.array(distances)
     simulations = np.array(simulations)
+
+    # §format selected simulations
+    simulations = combine_simulation_outputs(simulations)
 
     # Set the results for the first generation
     results.set_posterior_distribution(pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))}), generation=0)
@@ -333,6 +339,9 @@ def calibration_abc_smc(observed_data,
         distances = np.array(new_distances)
         simulations = np.array(new_simulations)
 
+        # format selected simulations 
+        simulations = combine_simulation_outputs(simulations)
+
         # Set the results for the generation
         results.set_posterior_distribution(pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))}), generation=gen + 1)
         results.set_distances(distances, generation=gen + 1)
@@ -419,6 +428,9 @@ def calibration_abc_rejection(simulation_function: Callable,
         if total_simulations_budget is not None and n_simulations > total_simulations_budget:
             print(f"Total simulations budget reached")
             break
+
+    # format selected simulations
+    simulations = combine_simulation_outputs(simulations)
 
     # format results 
     results = CalibrationResults()
