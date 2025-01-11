@@ -134,10 +134,18 @@ class Population:
         Returns:
             None
         """
+        # Cast contact_matrix to a numpy array
+        contact_matrix = np.array(contact_matrix)
+
+        # Check that contact_matrix is a 2D square numpy array
+        if len(contact_matrix.shape) != 2 or contact_matrix.shape[0] != contact_matrix.shape[1]:
+            raise ValueError("Contact matrix must be a 2D square numpy array.")
+        
         self.contact_matrices[layer_name] = contact_matrix
 
 
-    def add_population(self, Nk: List[float], Nk_names: Optional[List[str]] = None) -> None:
+    def add_population(self, Nk: List[float], 
+                       Nk_names: Optional[List[str]] = None) -> None:
         """
         Adds population data for different demographic groups.
 
@@ -149,11 +157,26 @@ class Population:
         Returns:
             None
         """
-        self.Nk = Nk
+
+        # Cast Nk to a numpy array
+        Nk = np.array(Nk)
+
+        # Check that Nk is a 1d array
+        if len(Nk.shape) != 1:
+            raise ValueError("Nk must be a 1-dimensional array.")
+
+        # If demographic group names are not provided, generate default names
         if Nk_names is None:
-            self.Nk_names = list(range(len(Nk)))
+            Nk_names = np.array(range(len(Nk)))
         else:
-            self.Nk_names = Nk_names
+            Nk_names = np.array(Nk_names)
+        
+        # check that Nk and Nk_names have the same length
+        if len(Nk) != len(Nk_names):
+            raise ValueError("Nk and Nk_names must have the same length.")
+        
+        self.Nk_names = Nk_names
+        self.Nk = Nk
 
 
 def map_age_groups_to_idx(age_group_mapping: Dict[str, List[str]], 

@@ -31,7 +31,7 @@ def plot_quantiles(results: Any,
                    ci_alpha: float = 0.3, 
                    title: str = "", 
                    show_legend: bool = True, 
-                   palette: str = "Set2", 
+                   palette: str = "Dark2", 
                    colors: Optional[Union[List[str], str]] = None, 
                    labels: Optional[Union[List[str], str]] = None) -> None:
     """
@@ -106,7 +106,7 @@ def plot_selected_quantiles(calibration_results: Any,
                             title: str = "", 
                             show_legend: bool = True, 
                             ylabel: str = "", 
-                            palette: str = "Set2") -> None:
+                            palette: str = "Dark2") -> None:
     """
     Plots the selected quantiles from the calibration results.
 
@@ -283,7 +283,7 @@ def plot_posterior_distribution_2d(calibration_results: Any,
 def plot_selected_trajectories(calibration_results, ax=None, show_data=True, columns="data", 
                                lower_q=0.05, upper_q=0.95, show_median=True, 
                                ci_alpha=0.3, title="", show_legend=True, ylabel="", 
-                               palette="Set2"):
+                               palette="Dark2"):
     """
     TODO
     """
@@ -521,7 +521,7 @@ def plot_projections(projections: Any,
                      title: str = "", 
                      show_legend: bool = True, 
                      ylabel: str = "", 
-                     palette: str = "Set2") -> None:
+                     palette: str = "Dark2") -> None:
     """
     Plots the projections along with the selected quantiles from the calibration results.
 
