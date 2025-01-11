@@ -721,15 +721,13 @@ class EpiModel:
                         initial_conditions_dict: Optional[Dict[str, np.ndarray]] = None, 
                         Nsim: int = 100, 
                         quantiles: Optional[List[float]] = None, 
-                        post_processing_function: Callable = lambda x: x, 
-                        ppfun_args: Optional[Dict] = None, 
                         percentage_in_agents: float = 0.01,
                         dt: Optional[float] = 1.,
                         resample_frequency: Optional[str] = "D",
                         resample_aggregation: Optional[Union[str, dict]] = "last",
                         **kwargs) -> SimulationResults:
         """
-        Simulates the epidemic model over the given time period in parallel.
+        Simulates the epidemic model over the given time period.
 
         Args:
             start_date (str or pd.Timestamp): The start date of the simulation. Default is "2020-01-01".
@@ -737,8 +735,6 @@ class EpiModel:
             initial_conditions_dict (dict, optional): A dictionary of initial conditions for the simulation.
             Nsim (int, optional): The number of simulation runs to perform (default is 100).
             quantiles (list of float, optional): A list of quantiles to compute for the simulation results.
-            post_processing_function (callable, optional): A function to apply to each simulation output for post-processing.
-            ppfun_args (dict, optional): Arguments to pass to the post-processing function.
             percentage_in_agents (float, optional): The percentage of the population to initialize in the agents compartment.
             dt (float, optional): The time step for the simulation, expressed in days. Default is 1 (day).
             resample_frequency (str, optional): The frequency at which to resample the simulation results. Default is "D" (daily).
@@ -752,9 +748,6 @@ class EpiModel:
         if quantiles is None:
             quantiles = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]
 
-        if ppfun_args is None:
-            ppfun_args = {}
-
         # Compute the simulation dates
         total_days = len(pd.date_range(start_date, end_date, freq="D"))
         simulation_dates = compute_simulation_dates(start_date, end_date, steps=int(1 / dt) * total_days)
@@ -764,10 +757,11 @@ class EpiModel:
             initial_conditions_dict = self.create_default_initial_conditions(percentage_in_agents=percentage_in_agents)
 
         # Simulate and concatenate results from multiple runs 
-        simulated_compartments = {}
+        simulated_compartments_list = []
         for _ in range(Nsim):
-            results = simulate(self, simulation_dates, dt=dt, post_processing_function=post_processing_function, ppfun_args=ppfun_args, initial_conditions_dict=initial_conditions_dict, **kwargs)
-            simulated_compartments = combine_simulation_outputs(simulated_compartments, results)
+            results = simulate(self, simulation_dates, dt=dt, initial_conditions_dict=initial_conditions_dict, **kwargs)
+            simulated_compartments_list.append(results)
+        simulated_compartments = combine_simulation_outputs(simulated_compartments_list)
 
         # Convert results to NumPy arrays and compute quantiles
         simulated_compartments = {k: np.array(v) for k, v in simulated_compartments.items()}
@@ -789,8 +783,6 @@ def simulate(epimodel,
              simulation_dates: List[pd.Timestamp], 
              initial_conditions_dict: Optional[Dict[str, np.ndarray]],
              dt : float = 1.,
-             post_processing_function: Callable = lambda x: x, 
-             ppfun_args: Optional[Dict] = None, 
              **kwargs) -> Dict:
     """
     Runs a simulation of the epidemic model over the specified simulation dates.
@@ -800,13 +792,10 @@ def simulate(epimodel,
         simulation_dates (list of pd.Timestamp): The list of dates over which to run the simulation.
         initial_conditions_dict (dict, optional): A dictionary of initial conditions for the simulation.
         dt (float, optional): The time step for the simulation, expressed in days. Default is 1 (day).
-        post_processing_function (callable, optional): A function to apply to the results after the simulation. 
-            Default is an identity function.
-        ppfun_args (dict, optional): Arguments to pass to the post-processing function. Default is an empty dictionary.
         **kwargs: Additional parameters to overwrite model parameters during the simulation.
 
     Returns:
-        dict: The formatted results of the simulation after applying post-processing.
+        dict: The formatted results of the simulation
 
     Raises:
         ValueError: If the model has no transitions defined.
@@ -815,9 +804,6 @@ def simulate(epimodel,
     # check that the model has transitions
     if len(epimodel.transitions_list) == 0:
         raise ValueError("The model has no transitions defined. Please add transitions before running simulations.")
-    
-    if ppfun_args is None:
-        ppfun_args = {}
         
     # Compute the contact reductions based on the interventions
     epimodel.compute_contact_reductions(simulation_dates)
@@ -839,9 +825,6 @@ def simulate(epimodel,
 
     # Format the simulation output
     results = format_simulation_output(np.array(compartments_evolution)[1:], epimodel.compartments_idx, epimodel.population.Nk_names)
-
-    # Apply post-processing to the results
-    results = post_processing_function(results, **ppfun_args)
     
     return results
 

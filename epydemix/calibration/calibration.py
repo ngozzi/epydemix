@@ -5,7 +5,27 @@ from .calibration_results import CalibrationResults
 from .metrics import *
 from datetime import datetime, timedelta
 from ..utils.abc_smc_utils import DefaultPerturbationContinuous, DefaultPerturbationDiscrete, sample_prior
-from typing import Callable, Dict, Any, Optional
+from ..utils.utils import combine_simulation_outputs
+from typing import Callable, Dict, Any, Optional, Tuple
+
+def wrapper_function(func, *args, **kwargs):
+    """
+    Wrapper function to ensure the passed function returns a dictionary.
+    
+    Parameters:
+    - func: The function to be called.
+    - *args, **kwargs: Arguments and keyword arguments for the function.
+
+    Returns:
+    - The output of the passed function if it's a dictionary.
+
+    Raises:
+    - ValueError: If the function does not return a dictionary.
+    """
+    result = func(*args, **kwargs)
+    if not isinstance(result, dict):
+        raise ValueError(f"The function {func.__name__} must return a dictionary, but it returned {type(result)}.")
+    return result
 
 
 def calibrate(strategy: str, 
@@ -123,7 +143,8 @@ def calibration_abc_top_fraction(simulation_function: Callable,
     for n in range(Nsim):
         params = sample_prior(priors, param_names)
         full_params = {**parameters, **dict(zip(param_names, params))}
-        results = simulation_function(full_params)
+        results = wrapper_function(simulation_function, full_params)
+        #results = simulation_function(full_params)
         distance = distance_function(data=observed_data, simulation=results)
         simulations.append(results)
         distances.append(distance)
@@ -207,7 +228,8 @@ def calibration_abc_smc(observed_data,
     for _ in range(num_particles):
         params = sample_prior(priors, param_names)
         full_params = {**user_params, **dict(zip(param_names, params))}
-        simulated_data = simulate_model(full_params)
+        simulated_data = wrapper_function(simulate_model, full_params)
+        #simulated_data = simulate_model(full_params)
         dist = distance_function(simulated_data, observed_data)
         particles.append(params)
         weights.append(1.0 / num_particles)
@@ -278,7 +300,8 @@ def calibration_abc_smc(observed_data,
                   for i, param in enumerate(param_names)
                 ]
                 if all(prob > 0 for prob in prior_probabilities):
-                    simulated_data = simulate_model(full_params)
+                    #simulated_data = simulate_model(full_params)
+                    simulated_data = wrapper_function(simulate_model, full_params)
                     dist = distance_function(simulated_data, observed_data)
                     n_simulations += 1
 
@@ -376,7 +399,8 @@ def calibration_abc_rejection(simulation_function: Callable,
     while len(distances) < num_particles: 
         params = sample_prior(priors, param_names)
         full_params = {**parameters, **dict(zip(param_names, params))}
-        results = simulation_function(full_params)
+        results = wrapper_function(simulation_function, full_params)
+        #results = simulation_function(full_params)
         distance = distance_function(data=observed_data, simulation=results)
         if distance < epsilon:
             simulations.append(results)
@@ -415,10 +439,8 @@ def calibration_abc_rejection(simulation_function: Callable,
 
 def run_projections(simulation_function: Callable, 
                     calibration_results: CalibrationResults, 
-                    parameters: Dict[str, Any], 
-                    iterations: int = 100, 
-                    include_quantiles: bool = True, 
-                    dates_column: str = "simulation_dates") -> Dict[str, Any]:
+                    parameters: Dict[str, Any],
+                    iterations: int = 100) -> Tuple[Dict[str, Any], pd.DataFrame]: 
     """
     Runs projections based on the posterior distribution obtained from calibration.
 
@@ -427,36 +449,31 @@ def run_projections(simulation_function: Callable,
         calibration_results (CalibrationResults): The results from a calibration process, containing the posterior distribution.
         parameters (Dict[str, Any]): A dictionary of parameters used for the projections.
         iterations (int, optional): The number of projection iterations to run (default is 100).
-        include_quantiles (bool, optional): Whether to compute and return quantiles from the projections (default is True).
-        dates_column (str, optional): The key used for simulation dates in the parameters dictionary (default is "simulation_dates").
 
     Returns:
-        Dict[str, Any]: A dictionary containing the formatted projections, including quantiles if requested.
+        Tuple[Dict[str, Any], pd.DataFrame]: A dictionary containing the formatted projections and a DataFrame containing the posterior samples used for each iteration.
     """
-
-
+        
     # get posterior distribution
     posterior_distribution = calibration_results.get_posterior_distribution()
-
-    # iterate
-    simulations = []
+    
+    # run projections and store results
+    projections, posterior_samples = [], {}
     for n in range(iterations): 
         # sample from posterior
         posterior_sample = posterior_distribution.iloc[np.random.randint(0, len(posterior_distribution))]
+
+        for k in posterior_sample.keys():
+            if k not in posterior_samples.keys():
+                posterior_samples[k] = []
+            posterior_samples[k].append(posterior_sample[k])
         
         # prepare and run simulation
         parameters.update(posterior_sample)
         result_projections = simulation_function(parameters)
-        simulations.append(result_projections)
+        projections.append(result_projections)
 
-    # format simulation results
-    selected_simulations_formatted = {}
-    for res in simulations:
-        selected_simulations_formatted = combine_simulation_outputs(selected_simulations_formatted, res)
+    # combine results
+    projections_formatted = combine_simulation_outputs(projections)
 
-    if include_quantiles:
-        selected_simulations_quantiles = compute_quantiles(selected_simulations_formatted, simulation_dates=parameters[dates_column])
-        return selected_simulations_quantiles
-    
-    else: 
-        return selected_simulations_formatted
+    return projections_formatted, pd.DataFrame(posterior_samples)
