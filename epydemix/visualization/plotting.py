@@ -95,7 +95,8 @@ def plot_quantiles(results: Any,
         ax.legend(loc="upper left", frameon=False)
 
 
-def plot_selected_quantiles(calibration_results: Any, 
+def plot_selected_quantiles(df_quantiles: pd.DataFrame,
+                            data: pd.DataFrame, 
                             ax: Optional[plt.Axes] = None, 
                             show_data: bool = True, 
                             columns: Union[str, List[str]] = "data", 
@@ -106,6 +107,7 @@ def plot_selected_quantiles(calibration_results: Any,
                             title: str = "", 
                             show_legend: bool = True, 
                             ylabel: str = "", 
+                            colors: Optional[Union[List[str], str]] = None, 
                             palette: str = "Dark2") -> None:
     """
     Plots the selected quantiles from the calibration results.
@@ -134,11 +136,11 @@ def plot_selected_quantiles(calibration_results: Any,
     if ax is None:
         fig, ax = plt.subplots(dpi=300, figsize=(10,4))
 
-    # get selected quantiles and data
-    df_quantiles = calibration_results.get_selected_quantiles()
-    data = calibration_results.get_data()
-
-    colors = sns.color_palette(palette, len(columns))
+    if colors is None:
+        colors = sns.color_palette(palette, len(columns))
+    else: 
+        if not isinstance(colors, list):
+            colors = [colors]
     t = 0
 
     pleg, handles = [], []
@@ -465,12 +467,12 @@ def compute_spectral_radius(m: np.ndarray) -> float:
 
 def plot_distance_distribution(calibration_results: Any, 
                                generation = None,
-                            ax: Optional[plt.Axes] = None, 
-                            xlabel: Optional[str] = None, 
-                            kind: str = "hist", 
-                            color: str = "dodgerblue", 
-                            ylabel: str = "", 
-                            **kwargs) -> None:
+                               ax: Optional[plt.Axes] = None, 
+                               xlabel: Optional[str] = None, 
+                               kind: str = "hist", 
+                               color: str = "dodgerblue", 
+                               ylabel: str = "", 
+                               **kwargs) -> None:
     """
     Plots the error distribution from the calibration results.
 
