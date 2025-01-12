@@ -29,6 +29,4 @@ exclude_patterns = []
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
-# Add these lines to conf.py
-
-sys.path.insert(0, os.path.abspath('../epydemix'))  # Adjust if using `src/` layout
+sys.path.insert(0, os.path.abspath('../../epydemix'))  # Adjust if using `src/` layout
