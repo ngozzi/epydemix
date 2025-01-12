@@ -220,12 +220,19 @@ def calibration_abc_smc(observed_data,
     continuous_params = [name for name in param_names if hasattr(priors[name], 'pdf')]
     discrete_params = [name for name in param_names if name not in continuous_params]
 
-    # Default perturbation functions
+    # Choose perturbation functions
     if perturbations is None:
         perturbations = {
             param: (DefaultPerturbationContinuous(param) if param in continuous_params else DefaultPerturbationDiscrete(param, priors[param]))
             for param in param_names
         }
+    else: 
+        for param in param_names:
+            if param not in perturbations.keys():
+                if param in continuous_params:
+                    perturbations[param] = DefaultPerturbationContinuous(param)
+                else:
+                    perturbations[param] = DefaultPerturbationDiscrete(param, priors[param])
 
     # Initialize the first generation 
     for _ in range(num_particles):
@@ -363,7 +370,9 @@ def calibration_abc_smc(observed_data,
         "distance_function": distance_function,
         "num_generations": num_generations,
         "max_time": max_time, 
-        "total_simulations_budget": total_simulations_budget
+        "total_simulations_budget": total_simulations_budget, 
+        "epsilon_schedule": epsilon_schedule,
+        "perturbations": perturbations
     })
 
     return results
