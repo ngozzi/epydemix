@@ -175,8 +175,9 @@ def plot_posterior_distribution(calibration_results: Any,
                                 xlabel: Optional[str] = None, 
                                 kind: str = "hist", 
                                 color: str = "dodgerblue", 
-                                ylabel: str = "", 
                                 prior_range: bool = False, 
+                                ylabel: str = None, 
+                                title: str = None,
                                 **kwargs) -> None:
     """
     Plots the posterior distribution of a given parameter from the calibration results.
@@ -209,10 +210,13 @@ def plot_posterior_distribution(calibration_results: Any,
     else: 
         raise ValueError("Unknown kind for plot: %s" % kind)
 
+    if ylabel is not None:
+        ax.set_ylabel(ylabel)
     if xlabel is not None:
         ax.set_xlabel(xlabel)
+    if title is not None:
+        ax.set_title(title)
 
-    ax.set_ylabel(ylabel)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
     ax.grid(axis="y", linestyle="--", linewidth=0.3)
