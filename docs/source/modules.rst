@@ -1,7 +1,7 @@
-src
-===
+epydemix
+========
 
 .. toctree::
    :maxdepth: 4
 
-   src
+   epydemix
