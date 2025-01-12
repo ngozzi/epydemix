@@ -385,7 +385,7 @@ def plot_spectral_radius(epimodel: Any,
                          show_perc: bool = True, 
                          layer: str = "overall", 
                          show_interventions: bool = True, 
-                         interventions_palette: str = "Set2", 
+                         interventions_palette: str = "Dark2", 
                          interventions_colors: Optional[List[str]] = None) -> None:
     """
     Plots the spectral radius of the contact matrices over time.
