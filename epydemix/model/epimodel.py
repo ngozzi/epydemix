@@ -645,14 +645,14 @@ class EpiModel:
             self.Cs[date]["overall"] = np.sum(np.array(list(self.Cs[date].values())), axis=0)
 
 
-    def create_default_initial_conditions(self, percentage_in_agents: float = 0.01) -> Dict[str, np.ndarray]:
+    def create_default_initial_conditions(self, percentage_in_agents: float = 0.0005) -> Dict[str, np.ndarray]:
         """
         Creates default initial conditions for the epidemic model. If initial conditions are not provided, 
         assigns a percentage of the population to agent compartments and the rest to source compartments, 
         considering different age groups.
 
         Args:
-            percentage_in_agents (float): Percentage of population to place in agent compartments. Defaults to 1%.
+            percentage_in_agents (float): Percentage of population to place in agent compartments. Defaults to 0.05%.
             initial_conditions (dict, optional): A dictionary specifying initial conditions. If None, this function creates default conditions.
 
         Returns:
