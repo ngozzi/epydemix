@@ -721,7 +721,7 @@ class EpiModel:
                         initial_conditions_dict: Optional[Dict[str, np.ndarray]] = None, 
                         Nsim: int = 100, 
                         quantiles: Optional[List[float]] = None, 
-                        percentage_in_agents: float = 0.01,
+                        percentage_in_agents: float = 0.0005,
                         dt: Optional[float] = 1.,
                         resample_frequency: Optional[str] = "D",
                         resample_aggregation: Optional[Union[str, dict]] = "last",
