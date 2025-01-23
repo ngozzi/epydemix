@@ -1,50 +1,31 @@
 from .transition import Transition
-from ..utils.utils import compute_quantiles, format_simulation_output, combine_simulation_outputs, create_definitions, apply_overrides, generate_unique_string, evaluate, compute_simulation_dates, apply_initial_conditions
+from ..utils.utils import format_simulation_output, create_definitions, apply_overrides, generate_unique_string, evaluate, compute_simulation_dates, apply_initial_conditions
+from .simulation_output import Trajectory
 from .simulation_results import SimulationResults
 import numpy as np 
 import pandas as pd
 from numpy.random import multinomial
 from ..population.population import Population, load_epydemix_population
 import copy
-from typing import List, Dict, Optional, Union, Any, Callable
+from typing import List, Dict, Optional, Union, Any
 
 
 class EpiModel:
     """
-    EpiModel Class
-
-    This class represents a compartmental epidemic model that simulates the spread of infectious diseases across
-    demographic groups. The EpiModel class provides mechanisms to define compartments, transitions, and interventions,
-    and simulate the dynamics of disease transmission based on various population and contact matrix inputs.
-
-    Attributes:
-        compartments (list): List of compartments representing different states in the epidemic model (e.g., susceptible, infected).
-        compartments_idx (dict): Dictionary mapping compartment names to indices for easier access during simulations.
-        parameters (dict): Model parameters such as transmission rates, recovery rates, and others, used in the simulations.
-        transitions (dict): Dictionary containing the transitions between compartments, with associated rates and agents.
-        transitions_list (list): List of transition objects representing transitions between compartments.
-        population (Population): Population object containing demographic and contact matrix information for the model.
-        overrides (dict): Dictionary containing parameter overrides for specific time periods.
-        interventions (list): List of interventions to apply during the simulation, such as social distancing or vaccination.
-        Cs (dict): Contact matrices for different layers (e.g., home, work, school) used in the simulation, structured by date.
-        definitions (dict): Model definitions for parameters and overrides.
-
-        
+    EpiModel: A compartmental epidemic model simulator
+    
     Example:
-        # Initialize an epidemic model with custom compartments
-        compartments = ["Susceptible", "Infected", "Recovered"]
-        model = EpiModel(compartments=compartments)
-
-        # Define transitions between compartments
-        model.add_transition(source="Susceptible", target="Infected", rate=0.3, agent="Infected")
-        model.add_transition(source="Infected", target="Recovered", rate=0.1)
-
-        # Run simulations specifying time frame and initial conditions
-        results = model.run_simulations(
-            start_date="2019-12-01", 
-            end_date="2020-04-01", 
-            initial_conditions_dict={"Susceptible": 99990, "Infected": 10}
-        )
+        >>> model = EpiModel()
+        >>> model.add_compartment("S")\\
+        ...      .add_compartment("I")\\
+        ...      .add_compartment("R")
+        >>> model.add_transition(source="S", target="I", rate="beta", agent="I")
+        >>> model.add_transition(source="I", target="R", rate="gamma")
+        >>> results = model.run_simulations(
+        ...     start_date="2020-01-01",
+        ...     end_date="2020-12-31",
+        ...     Nsim=100
+        ... )
     """
 
     def __init__(self, 
@@ -716,86 +697,89 @@ class EpiModel:
     
 
     def run_simulations(self, 
-                        start_date: Union[str, pd.Timestamp] = "2020-01-01", 
-                        end_date: Union[str, pd.Timestamp] = "2020-12-31", 
-                        initial_conditions_dict: Optional[Dict[str, np.ndarray]] = None, 
-                        Nsim: int = 100, 
-                        quantiles: Optional[List[float]] = None, 
-                        percentage_in_agents: float = 0.0005,
-                        dt: Optional[float] = 1.,
-                        resample_frequency: Optional[str] = "D",
-                        resample_aggregation: Optional[Union[str, dict]] = "last",
-                        **kwargs) -> SimulationResults:
+                       start_date: Union[str, pd.Timestamp] = "2020-01-01", 
+                       end_date: Union[str, pd.Timestamp] = "2020-12-31", 
+                       initial_conditions_dict: Optional[Dict[str, np.ndarray]] = None, 
+                       Nsim: int = 100, 
+                       percentage_in_agents: float = 0.0005,
+                       dt: Optional[float] = 1.,
+                       resample_frequency: Optional[str] = "D",
+                       resample_aggregation: Optional[Union[str, dict]] = "last",
+                       fill_method: Optional[str] = "ffill") -> SimulationResults:
         """
-        Simulates the epidemic model over the given time period.
+        Simulates the epidemic model multiple times over the given time period.
 
         Args:
             start_date (str or pd.Timestamp): The start date of the simulation. Default is "2020-01-01".
             end_date (str or pd.Timestamp): The end date of the simulation. Default is "2020-12-31".
             initial_conditions_dict (dict, optional): A dictionary of initial conditions for the simulation.
             Nsim (int, optional): The number of simulation runs to perform (default is 100).
-            quantiles (list of float, optional): A list of quantiles to compute for the simulation results.
             percentage_in_agents (float, optional): The percentage of the population to initialize in the agents compartment.
             dt (float, optional): The time step for the simulation, expressed in days. Default is 1 (day).
             resample_frequency (str, optional): The frequency at which to resample the simulation results. Default is "D" (daily).
             resample_aggregation (str, optional): The aggregation method to use when resampling the simulation results. Default is "sum".
-            **kwargs: Additional arguments to pass to the stochastic simulation function.
+            fill_method (str, optional): Method to fill NaN values after resampling. Default is "ffill".
 
         Returns:
-            SimulationResults: An object containing the full simulation results, including quantiles and full trajectories.
+            SimulationResults: An object containing all simulation trajectories.
+
+        Raises:
+            RuntimeError: If the simulation fails.
         """
+        
+        # Run multiple simulations and collect trajectories
+        try:
+            trajectories = []
+            for _ in range(Nsim):
+                trajectory = simulate(
+                    self, 
+                    start_date=start_date,
+                    end_date=end_date,
+                    dt=dt,
+                    initial_conditions_dict=initial_conditions_dict,
+                    percentage_in_agents=percentage_in_agents,
+                    resample_frequency=resample_frequency,
+                    resample_aggregation=resample_aggregation,
+                    fill_method=fill_method
+                )
+                trajectories.append(trajectory)
+        except Exception as e:
+            raise RuntimeError(f"Simulation failed: {str(e)}") from e
 
-        if quantiles is None:
-            quantiles = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]
+        # Return SimulationResults with all trajectories
+        return SimulationResults(
+            trajectories=trajectories,
+            parameters=self.parameters
+        )
 
-        # Compute the simulation dates
-        total_days = len(pd.date_range(start_date, end_date, freq="D"))
-        simulation_dates = compute_simulation_dates(start_date, end_date, steps=int(1 / dt) * total_days)
 
-        # Compute initial conditions if needed
-        if initial_conditions_dict is None:
-            initial_conditions_dict = self.create_default_initial_conditions(percentage_in_agents=percentage_in_agents)
-
-        # Simulate and concatenate results from multiple runs 
-        simulated_compartments_list = []
-        for _ in range(Nsim):
-            results = simulate(self, simulation_dates, dt=dt, initial_conditions_dict=initial_conditions_dict, **kwargs)
-            simulated_compartments_list.append(results)
-        simulated_compartments = combine_simulation_outputs(simulated_compartments_list)
-
-        # Convert results to NumPy arrays and compute quantiles
-        simulated_compartments = {k: np.array(v) for k, v in simulated_compartments.items()}
-        df_quantiles = compute_quantiles(data=simulated_compartments, simulation_dates=simulation_dates, quantiles=quantiles, 
-                                         resample_frequency=resample_frequency, resample_aggregation=resample_aggregation)
-
-        # Format and return simulation results
-        simulation_results = SimulationResults()
-        simulation_results.set_Nsim(Nsim)
-        simulation_results.set_df_quantiles(df_quantiles)
-        simulation_results.set_full_trajectories(simulated_compartments)
-        simulation_results.set_compartment_idx(self.compartments_idx)
-        simulation_results.set_parameters(self.parameters)
-
-        return simulation_results
-
-    
 def simulate(epimodel, 
-             simulation_dates: List[pd.Timestamp], 
-             initial_conditions_dict: Optional[Dict[str, np.ndarray]],
-             dt : float = 1.,
-             **kwargs) -> Dict:
+             start_date: Union[str, pd.Timestamp] = "2020-01-01", 
+             end_date: Union[str, pd.Timestamp] = "2020-12-31", 
+             initial_conditions_dict: Optional[Dict[str, np.ndarray]] = None, 
+             percentage_in_agents: float = 0.0005,
+             dt: Optional[float] = 1.,
+             resample_frequency: Optional[str] = "D",
+             resample_aggregation: Optional[Union[str, dict]] = "last",
+             fill_method: Optional[str] = "ffill",
+             **kwargs) -> Trajectory:
     """
     Runs a simulation of the epidemic model over the specified simulation dates.
 
     Args:
         epimodel (EpiModel): The epidemic model instance to simulate.
-        simulation_dates (list of pd.Timestamp): The list of dates over which to run the simulation.
+        start_date (str or pd.Timestamp): The start date of the simulation. Default is "2020-01-01".
+        end_date (str or pd.Timestamp): The end date of the simulation. Default is "2020-12-31".
         initial_conditions_dict (dict, optional): A dictionary of initial conditions for the simulation.
+        percentage_in_agents (float, optional): The percentage of the population to initialize in the agents compartment.
         dt (float, optional): The time step for the simulation, expressed in days. Default is 1 (day).
+        resample_frequency (str, optional): The frequency at which to resample the simulation results. Default is "D" (daily).
+        resample_aggregation (str, optional): The aggregation method to use when resampling the simulation results. Default is "sum".
+        fill_method (str, optional): The method to use when filling NaN values after resampling. Default is "ffill".
         **kwargs: Additional parameters to overwrite model parameters during the simulation.
 
     Returns:
-        dict: The formatted results of the simulation
+        Trajectory: The trajectory of the simulation
 
     Raises:
         ValueError: If the model has no transitions defined.
@@ -804,6 +788,14 @@ def simulate(epimodel,
     # check that the model has transitions
     if len(epimodel.transitions_list) == 0:
         raise ValueError("The model has no transitions defined. Please add transitions before running simulations.")
+    
+    # Compute the simulation dates
+    total_days = len(pd.date_range(start_date, end_date, freq="D"))
+    simulation_dates = compute_simulation_dates(start_date, end_date, steps=int(1 / dt) * total_days)
+
+    # Compute initial conditions if needed
+    if initial_conditions_dict is None:
+        initial_conditions_dict = epimodel.create_default_initial_conditions(percentage_in_agents=percentage_in_agents)
         
     # Compute the contact reductions based on the interventions
     epimodel.compute_contact_reductions(simulation_dates)
@@ -820,90 +812,130 @@ def simulate(epimodel,
     # Initialize population in different compartments and demographic groups
     initial_conditions = apply_initial_conditions(epimodel, initial_conditions_dict)
 
-    # Run the stochastic simulation
-    compartments_evolution = stochastic_simulation(simulation_dates, epimodel, epimodel.definitions, initial_conditions, dt=dt)
+    # Pre-compute contact matrices list
+    contact_matrices = [epimodel.Cs[date]["overall"] for date in simulation_dates]
+    
+    # Run simulation with pre-computed contacts
+    trajectories = stochastic_simulation(
+        T=len(simulation_dates),
+        contact_matrices=contact_matrices,  
+        epimodel=epimodel,
+        parameters=epimodel.definitions,
+        initial_conditions=initial_conditions,
+        dt=dt
+    )
 
     # Format the simulation output
-    results = format_simulation_output(np.array(compartments_evolution)[1:], epimodel.compartments_idx, epimodel.population.Nk_names)
-    
-    return results
+    results = format_simulation_output(trajectories, epimodel.compartments_idx, epimodel.population.Nk_names)
+    trajectory = Trajectory(data=results, dates=simulation_dates, compartment_idx=epimodel.compartments_idx, parameters=epimodel.parameters)
+
+    # Resample trajectories
+    trajectory = trajectory.resample(resample_frequency, resample_aggregation, fill_method)
+
+    # Return the trajectory
+    return trajectory
 
 
-def stochastic_simulation(simulation_dates: List[pd.Timestamp], 
-                          epimodel, 
-                          parameters: Dict, 
-                          initial_conditions: np.ndarray, 
-                          dt : float) -> np.ndarray:
+def stochastic_simulation(T: int,
+                         contact_matrices: List[np.ndarray],
+                         epimodel,
+                         parameters: Dict,
+                         initial_conditions: np.ndarray,
+                         dt: float) -> np.ndarray:
     """
-    Run a stochastic simulation of the epidemic model over the specified time period.
-
+    Run a stochastic simulation of the epidemic model.
+    
     Args:
-        simulation_dates (list of pd.Timestamp): A list of dates over which the simulation is run.
-        epimodel (EpiModel): The epidemic model containing compartments, contact matrices, and transitions.
-        parameters (dict): A dictionary of model parameters used during the simulation.
-        initial_conditions (np.ndarray): An array representing the initial population distribution across compartments and demographic groups.
-        dt (float): The time step for the simulation, expressed in days.
-
-    Returns:
-        np.ndarray: A 3D array representing the evolution of compartment populations over time. The shape of the 
-                    array is (time_steps, num_compartments, num_demographic_groups).
+        T: Number of time steps
+        contact_matrices: Pre-computed list of contact matrices
+        epimodel: The epidemic model
+        parameters: Model parameters
+        initial_conditions: Initial population distribution
+        dt: Time step size
     """
-    compartments_evolution = [initial_conditions]
-
-    # Simulate each time step
-    for i, date in enumerate(simulation_dates):
-
-        # Get the contact matrix for the current date
-        C = epimodel.Cs[date]["overall"]
-
-        # Last time step population in different compartments
-        pop = compartments_evolution[-1]
-        new_pop = pop.copy()
-
-        for comp in epimodel.compartments:
-            # Initialize probabilities for transitions
-            trans = epimodel.transitions[comp]
-            prob = np.zeros((len(epimodel.compartments), len(epimodel.population.Nk)), dtype='float')
-
-            for tr in trans:
-                source = epimodel.compartments_idx[tr.source]
-                target = epimodel.compartments_idx[tr.target]
-                env_copy = copy.deepcopy(parameters)
-                rate = evaluate(expr=tr.rate, env=env_copy)[i]
-
-                # Check for interaction with an agent
-                if tr.agent is not None:
-                    agent = epimodel.compartments_idx[tr.agent]  
-                    interaction = np.array([
-                        np.sum(C[age, :] * pop[agent, :] / epimodel.population.Nk) 
-                        for age in range(len(epimodel.population.Nk))
-                    ])
-                    rate *= interaction  # Interaction term  
-
-                prob[target, :] += rate * dt
-
-            # Exponential decay for transition probability 
-            prob = 1 - np.exp(-prob)
-
-            # Probability of not transitioning remains in source compartment
-            prob[source, :] = 1 - np.sum(prob, axis=0)
-
-            # Compute transitions using the multinomial distribution
-            delta = np.array([multinomial(pop[source][i], prob[:, i]) for i in range(len(epimodel.population.Nk))])
-            delta[:, source] = 0
-            changes = np.sum(delta)
-
-            # Skip to the next iteration if no changes
-            if changes == 0:
-                continue
-
-            # Update populations of the source compartment
-            new_pop[source, :] -= np.sum(delta, axis=1)
-
-            # Update target compartments population
-            new_pop += delta.T
-
-        compartments_evolution.append(new_pop)
+    # Pre-allocate arrays
+    N = len(epimodel.population.Nk)
+    C = len(epimodel.compartments)
     
-    return np.array(compartments_evolution)
-
+    compartments_evolution = np.zeros((T + 1, C, N), dtype=np.float64)
+    compartments_evolution[0] = initial_conditions
+    
+    # Pre-compute population sizes and create views for better performance
+    pop_sizes = epimodel.population.Nk
+    
+    # Pre-allocate arrays for probabilities and transitions
+    prob = np.zeros((C, N), dtype=np.float64)
+    new_pop = np.zeros((C, N), dtype=np.float64)
+    
+    # Pre-compute indices for better performance
+    comp_indices = epimodel.compartments_idx
+    
+    # Simulate each time step
+    for t in range(T):
+        # Get the contact matrix for the current date (avoid dict lookup in loop)
+        contact_matrix = contact_matrices[t]
+        
+        # Get current population state (use view instead of copy)
+        pop = compartments_evolution[t]
+        new_pop[:] = pop  # Reset new_pop using slice assignment
+        
+        # Process each compartment
+        for comp in epimodel.compartments:
+            # Get transitions for this compartment (avoid dict lookup in loop)
+            transitions = epimodel.transitions[comp]
+            if not transitions:  # Skip if no transitions
+                continue
+                
+            # Reset probability array (faster than creating new array)
+            prob.fill(0)
+            
+            # Process transitions
+            source_idx = comp_indices[comp]
+            for tr in transitions:
+                target_idx = comp_indices[tr.target]
+                
+                # Get rate (avoid deep copy if possible)
+                rate = evaluate(expr=tr.rate, env=parameters)[t]
+                
+                # Handle agent interactions
+                if tr.agent is not None:
+                    agent_idx = comp_indices[tr.agent]
+                    # Vectorized interaction computation
+                    interaction = np.sum(
+                        contact_matrix * pop[agent_idx] / pop_sizes, 
+                        axis=1
+                    )
+                    rate *= interaction
+                
+                prob[target_idx] += rate * dt
+            
+            # Compute transition probabilities (in-place operations)
+            np.negative(prob, out=prob)
+            np.exp(prob, out=prob)
+            np.subtract(1, prob, out=prob)
+            
+            # Set probability of staying in source compartment
+            prob[source_idx] = 1 - np.sum(prob, axis=0)
+            
+            # Current compartment population
+            current_pop = pop[source_idx]
+            
+            # Skip if no population in compartment
+            if not np.any(current_pop):
+                continue
+            
+            # Compute transitions using multinomial (vectorized)
+            delta = np.array([
+                multinomial(n, p) if n > 0 else np.zeros(C)
+                for n, p in zip(current_pop, prob.T)
+            ])
+            
+            # Update populations (use in-place operations)
+            np.subtract(new_pop[source_idx], np.sum(delta, axis=1), 
+                       out=new_pop[source_idx])
+            new_pop += delta.T
+        
+        # Store the new state
+        compartments_evolution[t + 1] = new_pop
+    
+    return compartments_evolution[1:]  # Remove initial conditions

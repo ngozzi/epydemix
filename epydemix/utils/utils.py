@@ -5,7 +5,7 @@ import datetime
 import random
 import string
 from evalidate import Expr, base_eval_model
-from typing import Union, Dict, List, Any, Optional
+from typing import Union, Dict, List, Any, Optional, Tuple
 
 def is_scalar(value):
     return np.isscalar(value) and not isinstance(value, (str, bytes))
@@ -114,67 +114,6 @@ def create_definitions(
     return definitions
 
 
-def compute_quantiles(
-        data: Dict[str, np.ndarray],
-        simulation_dates: List[Union[str, pd.Timestamp]],
-        axis: int = 0,
-        quantiles: List[float] = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975],
-        resample_frequency: Optional[str] = "D", 
-        resample_aggregation: str = "last"
-    ) -> pd.DataFrame:
-    """
-    Computes the specified quantiles for each key in the provided data over the given dates.
-
-    Args:
-        data (Dict[str, np.ndarray]): A dictionary where keys represent different data categories 
-                                      (e.g., compartments, demographic groups) and values are arrays 
-                                      containing the simulation results.
-        simulation_dates (List[Union[str, pd.Timestamp]]): The dates corresponding to the simulation time steps.
-        axis (int, optional): The axis along which to compute the quantiles (default is 0).
-        quantiles (List[float], optional): A list of quantiles to compute for the simulation results 
-                                            (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
-        resample_frequency (str, optional): A Pandas-compatible frequency string (e.g., 'W', 'M') 
-                                            for resampling the data before computing quantiles. Default is 'D'.
-        resample_aggregation (str, optional): The aggregation method to use when resampling the data. Default is 'sum'.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the quantile values for each data category and date.
-                      The DataFrame has columns for the data category, quantile, and date.
-    """
-    # Ensure simulation_dates are a Pandas DatetimeIndex
-    simulation_dates = pd.to_datetime(simulation_dates)
-    dict_quantiles = {k: [] for k in data.keys()}
-    dict_quantiles["quantile"] = []
-    dict_quantiles["date"] = []
-
-    # Resample the data if resample_frequency is specified
-    if resample_frequency:
-        resampled_data = {}
-        resampled_dates = []
-        for k, v in data.items():
-            # Create a temporary DataFrame for resampling
-            temp_df = pd.DataFrame(v.T, index=simulation_dates)
-            # Resample and take the mean (you can customize aggregation here)
-            resampled_temp_df = temp_df.resample(resample_frequency).agg(resample_aggregation)
-            # Fill nan values 
-            resampled_temp_df = resampled_temp_df.fillna(method='ffill')
-            resampled_data[k] = resampled_temp_df.values.T
-            resampled_dates = resampled_temp_df.index  # Same for all keys
-        data = resampled_data
-        simulation_dates = resampled_dates
-
-    # Compute quantiles
-    for q in quantiles:
-        for k, v in data.items():
-            arrq = np.quantile(v, axis=axis, q=q)
-            dict_quantiles[k].extend(arrq)
-        dict_quantiles["quantile"].extend([q] * len(arrq))
-        dict_quantiles["date"].extend(simulation_dates)
-
-    df_quantile = pd.DataFrame(data=dict_quantiles)
-    return df_quantile
-
-
 def format_simulation_output(
         simulation_output: np.ndarray,
         compartments_idx: Dict[str, int],
@@ -199,38 +138,6 @@ def format_simulation_output(
             formatted_output[f"{comp}_{dem}"] = simulation_output[:, pos, i]
         formatted_output[f"{comp}_total"] = np.sum(simulation_output[:, pos, :], axis=1)
     return formatted_output
-
-
-def combine_simulation_outputs(
-        simulation_outputs_list: List[Dict[str, np.ndarray]]
-        ) -> Dict[str, List[np.ndarray]]:
-    """
-    Combines multiple simulation outputs into a single dictionary by appending new outputs to existing keys.
-
-    Args:
-        simulation_outputs_list (List[Dict[str, np.ndarray]]): A list of dictionaries containing the latest simulation output to be combined.
-                                                              Each dictionary contains keys corresponding to compartment-demographic names and values are arrays of simulation results.
-    Returns:
-        Dict[str, List[np.ndarray]]: A dictionary where keys are compartment-demographic names and values are lists of arrays.
-                                     Each list contains simulation results accumulated from multiple runs.
-    """
-    combined_simulation_outputs = {}    
-    for simulation_outputs in simulation_outputs_list:
-        if not combined_simulation_outputs:
-            # If combined_dict is empty, initialize it with the new dictionary
-            for key in simulation_outputs:
-                combined_simulation_outputs[key] = [simulation_outputs[key]]
-        else:
-            # If combined_dict already has keys, append the new dictionary's values
-            for key in simulation_outputs:
-                if key in combined_simulation_outputs:
-                    combined_simulation_outputs[key].append(simulation_outputs[key])
-                else:
-                    combined_simulation_outputs[key] = [simulation_outputs[key]]
-    # cast lists to arrays
-    for key in combined_simulation_outputs:
-        combined_simulation_outputs[key] = np.array(combined_simulation_outputs[key])
-    return combined_simulation_outputs
 
 
 def str_to_date(date_str: str) -> datetime.date:
@@ -409,3 +316,4 @@ def convert_to_2Darray(lst: List[Any]) -> np.ndarray:
     arr = np.array(lst)
     arr = arr.reshape(1, len(lst))
     return arr
+

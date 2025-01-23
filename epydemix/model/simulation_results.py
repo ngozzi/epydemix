@@ -1,137 +1,83 @@
-import pandas as pd
+from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
+import pandas as pd
+import numpy as np
+from .simulation_output import Trajectory
 
+@dataclass
 class SimulationResults:
     """
-    A class to store and manage results from a simulation.
-
+    Class to store and manage multiple simulation results.
+    
     Attributes:
-        Nsim (int): The number of simulations run.
-        full_trajectories (List[Any]): List of full trajectory data from simulations.
-        df_quantiles (pd.DataFrame): DataFrame containing quantiles of simulation results.
-        compartment_idx (Dict[str, int]): Dictionary mapping compartment names to indices.
-        parameters (Dict[str, Any]): Dictionary of parameters used in the simulation.
+        trajectories (List[Trajectory]): List of simulation trajectories
+        parameters (Dict[str, Any]): Dictionary of parameters used in the simulations
     """
+    trajectories: List[Trajectory]
+    parameters: Dict[str, Any]
 
-    def __init__(self) -> None:
+    @property
+    def Nsim(self) -> int:
+        """Number of simulations."""
+        return len(self.trajectories)
+    
+    @property
+    def dates(self) -> List[pd.Timestamp]:
+        """Simulation dates."""
+        return self.trajectories[0].dates if self.trajectories else []
+    
+    @property
+    def compartment_idx(self) -> Dict[str, int]:
+        """Compartment indices."""
+        return self.trajectories[0].compartment_idx if self.trajectories else {}
+
+    def get_stacked_trajectories(self) -> Dict[str, np.ndarray]:
         """
-        Initializes the SimulationResults object with default values.
-
-        Attributes:
-            Nsim (int): Initialized to 0.
-            full_trajectories (List[Any]): Initialized to an empty list.
-            df_quantiles (pd.DataFrame): Initialized to an empty DataFrame.
-            compartment_idx (Dict[str, int]): Initialized to an empty dictionary.
-            parameters (Dict[str, Any]): Initialized to an empty dictionary.
+        Get trajectories stacked into arrays of shape (Nsim, timesteps, demographics).
         """
-        self.Nsim = 0 
-        self.full_trajectories = []
-        self.df_quantiles = pd.DataFrame()
-        self.compartment_idx = {}
-        self.parameters = {}
+        if not self.trajectories:
+            return {}
+        
+        return {
+            comp_name: np.stack([t.data[comp_name] for t in self.trajectories], axis=0)
+            for comp_name in self.trajectories[0].data.keys()
+        }
 
-
-    def set_Nsim(self, Nsim: int) -> None:
+    def get_quantiles(self, quantiles: Optional[List[float]] = None) -> pd.DataFrame:
         """
-        Sets the number of simulations.
-
-        Args:
-            Nsim (int): The number of simulations to set.
-
-        Returns:
-            None
+        Compute quantiles across all trajectories.
         """
-        self.Nsim = Nsim
+        if quantiles is None:
+            quantiles = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]
 
-    def set_df_quantiles(self, df_quantiles: pd.DataFrame) -> None:
-        """
-        Sets the DataFrame containing quantiles of simulation results.
+        stacked = self.get_stacked_trajectories()
+        
+        # Create dates and quantiles first (these will be the same for all compartments)
+        dates = []
+        quantile_values = []
+        for q in quantiles:
+            dates.extend(self.dates)
+            quantile_values.extend([q] * len(self.dates))
+        
+        # Initialize data dictionary with dates and quantiles
+        data = {
+            "date": dates,
+            "quantile": quantile_values
+        }
+        
+        # Add compartment data
+        for comp_name, comp_data in stacked.items():
+            comp_quantiles = []
+            for q in quantiles:
+                quant_values = np.quantile(comp_data, q, axis=0)
+                comp_quantiles.extend(quant_values)
+            data[comp_name] = comp_quantiles
 
-        Args:
-            df_quantiles (pd.DataFrame): DataFrame with quantiles to set.
+        return pd.DataFrame(data)
 
-        Returns:
-            None
-        """
-        self.df_quantiles = df_quantiles
-
-    def set_full_trajectories(self, full_trajectories: List[Any]) -> None:
-        """
-        Sets the list of full trajectory data from simulations.
-
-        Args:
-            full_trajectories (List[Any]): List of full trajectory data to set.
-
-        Returns:
-            None
-        """
-        self.full_trajectories = full_trajectories 
-
-    def set_compartment_idx(self, compartment_idx: Dict[str, int]) -> None:
-        """
-        Sets the dictionary mapping compartment names to indices.
-
-        Args:
-            compartment_idx (Dict[str, int]): Dictionary of compartment names and indices to set.
-
-        Returns:
-            None
-        """
-        self.compartment_idx = compartment_idx
-
-    def set_parameters(self, parameters: Dict[str, Any]) -> None:
-        """
-        Sets the dictionary of parameters used in the simulation.
-
-        Args:
-            parameters (Dict[str, Any]): Dictionary of parameters to set.
-
-        Returns:
-            None
-        """
-        self.parameters = parameters
-
-    def get_Nsim(self) -> int:
-        """
-        Retrieves the number of simulations.
-
-        Returns:
-            int: The number of simulations.
-        """
-        return self.Nsim 
-
-    def get_df_quantiles(self) -> pd.DataFrame:
-        """
-        Retrieves the DataFrame containing quantiles of simulation results.
-
-        Returns:
-            pd.DataFrame: The DataFrame with quantiles.
-        """
-        return self.df_quantiles 
-
-    def get_full_trajectories(self) -> List[Any]:
-        """
-        Retrieves the list of full trajectory data from simulations.
-
-        Returns:
-            List[Any]: The list of full trajectory data.
-        """
-        return self.full_trajectories 
-
-    def get_compartment_idx(self) -> Dict[str, int]:
-        """
-        Retrieves the dictionary mapping compartment names to indices.
-
-        Returns:
-            Dict[str, int]: The dictionary of compartment names and indices.
-        """
-        return self.compartment_idx 
-
-    def get_parameters(self) -> Dict[str, Any]:
-        """
-        Retrieves the dictionary of parameters used in the simulation.
-
-        Returns:
-            Dict[str, Any]: The dictionary of parameters.
-        """
-        return self.parameters
+    def resample(self, freq: str, method: str = 'last', fill_method: str = 'ffill') -> 'SimulationResults':
+        """Resample all trajectories to new frequency."""
+        return SimulationResults(
+            trajectories=[t.resample(freq, method, fill_method) for t in self.trajectories],
+            parameters=self.parameters
+        )
