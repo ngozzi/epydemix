@@ -1,6 +1,6 @@
 # epydemix/utils/__init__.py
 
-from .utils import compute_days, compute_simulation_dates, convert_to_2Darray
+from .utils import compute_days, compute_simulation_dates, convert_to_2Darray, combine_simulation_outputs, compute_quantiles
 from .abc_smc_utils import sample_prior, compute_effective_sample_size, weighted_quantile, Perturbation, DefaultPerturbationDiscrete, DefaultPerturbationContinuous
 __all__ = [
     'compute_days',
@@ -11,5 +11,7 @@ __all__ = [
     'weighted_quantile',
     'Perturbation',
     'DefaultPerturbationDiscrete',
-    'DefaultPerturbationContinuous'
+    'DefaultPerturbationContinuous',
+    'combine_simulation_outputs',
+    'compute_quantiles'
 ]

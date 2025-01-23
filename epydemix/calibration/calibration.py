@@ -160,19 +160,22 @@ def calibration_abc_top_fraction(simulation_function: Callable,
     selected_params = {p: np.array(arr)[idxs] for p, arr in sampled_params.items()}
 
     # format selected simulations 
-    selected_simulations = combine_simulation_outputs(selected_simulations)
+    #selected_simulations = combine_simulation_outputs(selected_simulations)
 
     # format results 
-    results = CalibrationResults()
-    results.set_calibration_strategy("abc_top_fraction")
-    results.set_posterior_distribution(pd.DataFrame(data=selected_params), generation=0)
-    results.set_selected_trajectories(selected_simulations, generation=0)
-    results.set_distances(np.array(distances)[idxs], generation=0)
-    results.set_observed_data(observed_data)
-    results.set_priors(priors)
-    results.set_calibration_params({"top_fraction": top_fraction, 
-                                    "distance_function": distance_function, 
-                                    "Nsim": Nsim})
+    results = CalibrationResults(
+        calibration_strategy="abc_top_fraction",
+        posterior_distributions={0: pd.DataFrame(data=selected_params)},
+        selected_trajectories={0: selected_simulations},
+        distances={0: np.array(distances)[idxs]},
+        observed_data=observed_data,
+        priors=priors,
+        calibration_params={
+            "top_fraction": top_fraction, 
+            "distance_function": distance_function, 
+            "Nsim": Nsim
+        }
+    )
     return results
 
 
@@ -208,8 +211,7 @@ def calibration_abc_smc(observed_data,
         user_params = {}
 
     # Define the results object 
-    results = CalibrationResults()   
-    results.set_calibration_strategy("abc_smc")
+    results = CalibrationResults(calibration_strategy="abc_smc") 
 
     particles, weights, distances, simulations = [], [], [], []
 
@@ -251,14 +253,14 @@ def calibration_abc_smc(observed_data,
     distances = np.array(distances)
     simulations = np.array(simulations)
 
-    # §format selected simulations
-    simulations = combine_simulation_outputs(simulations)
+    # format selected simulations
+    #simulations = combine_simulation_outputs(simulations)
 
     # Set the results for the first generation
-    results.set_posterior_distribution(pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))}), generation=0)
-    results.set_distances(distances, generation=0)
-    results.set_weights(weights, generation=0)
-    results.set_selected_trajectories(simulations, generation=0)
+    results.posterior_distributions[0] = pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))})
+    results.distances[0] = distances
+    results.weights[0] = weights
+    results.selected_trajectories[0] = simulations
 
     # Sequential generations
     start_time = datetime.now()
@@ -347,13 +349,13 @@ def calibration_abc_smc(observed_data,
         simulations = np.array(new_simulations)
 
         # format selected simulations 
-        simulations = combine_simulation_outputs(simulations)
+        #simulations = combine_simulation_outputs(simulations)
 
         # Set the results for the generation
-        results.set_posterior_distribution(pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))}), generation=gen + 1)
-        results.set_distances(distances, generation=gen + 1)
-        results.set_weights(weights, generation=gen + 1)
-        results.set_selected_trajectories(simulations, generation=gen + 1)
+        results.posterior_distributions[gen + 1] = pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))})
+        results.distances[gen + 1] = distances
+        results.weights[gen + 1] = weights
+        results.selected_trajectories[gen + 1] = simulations
 
         # Print generation information
         end_generation_time = datetime.now()
@@ -362,9 +364,9 @@ def calibration_abc_smc(observed_data,
         print(f"\tElapsed time: {formatted_time}") 
 
     # Complete the results object
-    results.set_observed_data(observed_data)
-    results.set_priors(priors)
-    results.set_calibration_params({
+    results.observed_data = observed_data
+    results.priors = priors
+    results.calibration_params = {
         "num_particles": num_particles,
         "minimum_epsilon": minimum_epsilon,
         "distance_function": distance_function,
@@ -373,7 +375,7 @@ def calibration_abc_smc(observed_data,
         "total_simulations_budget": total_simulations_budget, 
         "epsilon_schedule": epsilon_schedule,
         "perturbations": perturbations
-    })
+    }
 
     return results
 
@@ -439,21 +441,24 @@ def calibration_abc_rejection(simulation_function: Callable,
             break
 
     # format selected simulations
-    simulations = combine_simulation_outputs(simulations)
+    #simulations = combine_simulation_outputs(simulations)
 
     # format results 
-    results = CalibrationResults()
-    results.set_calibration_strategy("abc_rejection")
-    results.set_posterior_distribution(pd.DataFrame(data=sampled_params), generation=0)
-    results.set_selected_trajectories(simulations, generation=0)
-    results.set_distances(np.array(distances), generation=0)
-    results.set_observed_data(observed_data)
-    results.set_priors(priors)
-    results.set_calibration_params({"epsilon": epsilon,
-                                    "distance_function": distance_function, 
-                                    "num_particles": num_particles, 
-                                    "max_time": max_time,
-                                    "total_simulations_budget": total_simulations_budget})
+    results = CalibrationResults(
+        calibration_strategy="abc_rejection",
+        posterior_distributions={0: pd.DataFrame(data=sampled_params)},
+        selected_trajectories={0: simulations},
+        distances={0: np.array(distances)},
+        observed_data=observed_data,
+        priors=priors,
+        calibration_params={
+            "epsilon": epsilon,
+            "distance_function": distance_function, 
+            "num_particles": num_particles, 
+            "max_time": max_time,
+            "total_simulations_budget": total_simulations_budget
+        }
+    )
     
     return results
 

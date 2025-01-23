@@ -317,3 +317,79 @@ def convert_to_2Darray(lst: List[Any]) -> np.ndarray:
     arr = arr.reshape(1, len(lst))
     return arr
 
+
+def combine_simulation_outputs(
+        simulation_outputs_list: List[Dict[str, np.ndarray]]
+        ) -> Dict[str, List[np.ndarray]]:
+    """
+    Combines multiple simulation outputs into a single dictionary by appending new outputs to existing keys.
+
+    Args:
+        simulation_outputs_list (List[Dict[str, np.ndarray]]): A list of dictionaries containing the latest simulation output to be combined.
+                                                              Each dictionary contains keys corresponding to compartment-demographic names and values are arrays of simulation results.
+    Returns:
+        Dict[str, List[np.ndarray]]: A dictionary where keys are compartment-demographic names and values are lists of arrays.
+                                     Each list contains simulation results accumulated from multiple runs.
+    """
+    combined_simulation_outputs = {}    
+    for simulation_outputs in simulation_outputs_list:
+        if not combined_simulation_outputs:
+            # If combined_dict is empty, initialize it with the new dictionary
+            for key in simulation_outputs:
+                combined_simulation_outputs[key] = [simulation_outputs[key]]
+        else:
+            # If combined_dict already has keys, append the new dictionary's values
+            for key in simulation_outputs:
+                if key in combined_simulation_outputs:
+                    combined_simulation_outputs[key].append(simulation_outputs[key])
+                else:
+                    combined_simulation_outputs[key] = [simulation_outputs[key]]
+    # cast lists to arrays
+    for key in combined_simulation_outputs:
+        combined_simulation_outputs[key] = np.array(combined_simulation_outputs[key])
+    return combined_simulation_outputs
+
+
+def compute_quantiles(
+        simulation_outputs: Dict[str, np.ndarray],
+        simulation_dates: List[datetime.date],
+        quantiles: List[float] = [0.05, 0.5, 0.95], 
+        ) -> pd.DataFrame:
+    """
+    Computes quantiles from simulation outputs for each compartment and demographic group.
+
+    Args:
+        simulation_outputs (Dict[str, np.ndarray]): Dictionary where keys are compartment-demographic names 
+            and values are arrays of shape (n_simulations, n_timesteps) containing simulation results
+        quantiles (List[float], optional): List of quantiles to compute. Defaults to [0.05, 0.5, 0.95]
+
+    Returns:
+        Dict[str, Dict[float, np.ndarray]]: Nested dictionary where:
+            - First level keys are compartment-demographic names
+            - Second level keys are quantile values
+            - Values are arrays containing the quantile values for each timestep
+    """
+    # Create dates and quantiles first (these will be the same for all compartments)
+    dates = []
+    quantile_values = []
+    for q in quantiles:
+        dates.extend(simulation_dates)
+        quantile_values.extend([q] * len(simulation_dates))
+    
+    # Initialize data dictionary with dates and quantiles
+    data = {
+        "date": dates,
+        "quantile": quantile_values
+    }
+    
+    # Add compartment data
+    for comp_name, comp_data in simulation_outputs.items():
+        comp_quantiles = []
+        for q in quantiles:
+            quant_values = np.quantile(comp_data, q, axis=0)
+            comp_quantiles.extend(quant_values)
+        data[comp_name] = comp_quantiles
+
+    return pd.DataFrame(data)
+
+
