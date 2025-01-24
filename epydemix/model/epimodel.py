@@ -7,7 +7,7 @@ import pandas as pd
 from numpy.random import multinomial
 from ..population.population import Population, load_epydemix_population
 import copy
-from typing import List, Dict, Optional, Union, Any
+from typing import List, Dict, Optional, Union, Any, Tuple
 
 
 class EpiModel:
@@ -72,6 +72,7 @@ class EpiModel:
             self.interventions = []
             self.compartments = []
             self.compartments_idx = {}
+            self.transitions_idx = {}
             self.parameters = {}
             self.definitions = {}
             self.overrides = {}
@@ -330,6 +331,10 @@ class EpiModel:
             self.transitions[compartment] = []  # Initialize empty transitions for each compartment
             self.compartments_idx[compartment] = max_idx + i  # Assign a unique index to each compartment
 
+    @property
+    def n_compartments(self) -> int:
+        """Get total number of compartments."""
+        return len(self.compartments)
 
     def clear_compartments(self) -> None: 
         """
@@ -490,6 +495,15 @@ class EpiModel:
         self.transitions_list.append(transition)
         self.transitions[source].append(transition)
 
+        # Update transitions index
+        transition_name = f"{source}_to_{target}"
+        if transition_name not in self.transitions_idx:
+            self.transitions_idx[transition_name] = len(self.transitions_idx)
+
+    @property
+    def n_transitions(self) -> int:
+        """Get total number of transitions."""
+        return len(self.transitions_idx)
         
     def clear_transitions(self) -> None:
         """
@@ -816,7 +830,7 @@ def simulate(epimodel,
     contact_matrices = [epimodel.Cs[date]["overall"] for date in simulation_dates]
     
     # Run simulation with pre-computed contacts
-    trajectories = stochastic_simulation(
+    compartments_evolution, transitions_evolution = stochastic_simulation(
         T=len(simulation_dates),
         contact_matrices=contact_matrices,  
         epimodel=epimodel,
@@ -826,8 +840,12 @@ def simulate(epimodel,
     )
 
     # Format the simulation output
-    results = format_simulation_output(trajectories, epimodel.compartments_idx, epimodel.population.Nk_names)
-    trajectory = Trajectory(data=results, dates=simulation_dates, compartment_idx=epimodel.compartments_idx, parameters=epimodel.parameters)
+    results = format_simulation_output(compartments_evolution, transitions_evolution, 
+                                       epimodel.compartments_idx, epimodel.transitions_idx, 
+                                       epimodel.population.Nk_names)
+    trajectory = Trajectory(compartments=results["compartments"], transitions=results["transitions"], 
+                            dates=simulation_dates, compartment_idx=epimodel.compartments_idx, 
+                            transitions_idx=epimodel.transitions_idx, parameters=epimodel.parameters)
 
     # Resample trajectories
     trajectory = trajectory.resample(resample_frequency, resample_aggregation, fill_method)
@@ -858,6 +876,7 @@ def stochastic_simulation(T: int,
     C = len(epimodel.compartments)
     
     compartments_evolution = np.zeros((T + 1, C, N), dtype=np.float64)
+    transitions_evolution = np.zeros((T, epimodel.n_transitions, N), dtype=np.float64)
     compartments_evolution[0] = initial_conditions
     
     # Pre-compute population sizes and create views for better performance
@@ -872,35 +891,24 @@ def stochastic_simulation(T: int,
     
     # Simulate each time step
     for t in range(T):
-        # Get the contact matrix for the current date (avoid dict lookup in loop)
         contact_matrix = contact_matrices[t]
-        
-        # Get current population state (use view instead of copy)
         pop = compartments_evolution[t]
-        new_pop[:] = pop  # Reset new_pop using slice assignment
+        new_pop[:] = pop  
         
-        # Process each compartment
         for comp in epimodel.compartments:
-            # Get transitions for this compartment (avoid dict lookup in loop)
             transitions = epimodel.transitions[comp]
-            if not transitions:  # Skip if no transitions
+            if not transitions: 
                 continue
                 
-            # Reset probability array (faster than creating new array)
             prob.fill(0)
-            
-            # Process transitions
             source_idx = comp_indices[comp]
+
             for tr in transitions:
                 target_idx = comp_indices[tr.target]
-                
-                # Get rate (avoid deep copy if possible)
                 rate = evaluate(expr=tr.rate, env=parameters)[t]
                 
-                # Handle agent interactions
                 if tr.agent is not None:
                     agent_idx = comp_indices[tr.agent]
-                    # Vectorized interaction computation
                     interaction = np.sum(
                         contact_matrix * pop[agent_idx] / pop_sizes, 
                         axis=1
@@ -909,18 +917,13 @@ def stochastic_simulation(T: int,
                 
                 prob[target_idx] += rate * dt
             
-            # Compute transition probabilities (in-place operations)
+            # Compute transition probabilities 
             np.negative(prob, out=prob)
             np.exp(prob, out=prob)
             np.subtract(1, prob, out=prob)
-            
-            # Set probability of staying in source compartment
             prob[source_idx] = 1 - np.sum(prob, axis=0)
             
-            # Current compartment population
             current_pop = pop[source_idx]
-            
-            # Skip if no population in compartment
             if not np.any(current_pop):
                 continue
             
@@ -929,13 +932,18 @@ def stochastic_simulation(T: int,
                 multinomial(n, p) if n > 0 else np.zeros(C)
                 for n, p in zip(current_pop, prob.T)
             ])
+
+            # Store transition counts
+            for tr in transitions:
+                tr_name = f"{tr.source}_to_{tr.target}"
+                tr_idx = epimodel.transitions_idx[tr_name]
+                transitions_evolution[t, tr_idx] = delta[:, epimodel.compartments_idx[tr.target]]
             
-            # Update populations (use in-place operations)
+            # Update populations
             np.subtract(new_pop[source_idx], np.sum(delta, axis=1), 
                        out=new_pop[source_idx])
             new_pop += delta.T
         
-        # Store the new state
         compartments_evolution[t + 1] = new_pop
     
-    return compartments_evolution[1:]  # Remove initial conditions
+    return compartments_evolution[1:], transitions_evolution

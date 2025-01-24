@@ -31,26 +31,43 @@ class SimulationResults:
         """Compartment indices."""
         return self.trajectories[0].compartment_idx if self.trajectories else {}
 
-    def get_stacked_trajectories(self) -> Dict[str, np.ndarray]:
+    def get_stacked_compartments(self) -> Dict[str, np.ndarray]:
         """
-        Get trajectories stacked into arrays of shape (Nsim, timesteps, demographics).
+        Get trajectories stacked into arrays of shape (Nsim, timesteps).
         """
         if not self.trajectories:
             return {}
         
         return {
-            comp_name: np.stack([t.data[comp_name] for t in self.trajectories], axis=0)
-            for comp_name in self.trajectories[0].data.keys()
+            comp_name: np.stack([t.compartments[comp_name] for t in self.trajectories], axis=0)
+            for comp_name in self.trajectories[0].compartments.keys()
         }
-
-    def get_quantiles(self, quantiles: Optional[List[float]] = None) -> pd.DataFrame:
+    
+    def get_stacked_transitions(self) -> Dict[str, np.ndarray]:
+        """
+        Get trajectories stacked into arrays of shape (Nsim, timesteps).
+        """
+        if not self.trajectories:
+            return {}
+        
+        return {
+            trans_name: np.stack([t.transitions[trans_name] for t in self.trajectories], axis=0)
+            for trans_name in self.trajectories[0].transitions.keys()
+        }
+    
+    def get_quantiles(self, stacked: Dict[str, np.ndarray], quantiles: Optional[List[float]] = None) -> pd.DataFrame:
         """
         Compute quantiles across all trajectories.
         """
         if quantiles is None:
             quantiles = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]
 
-        stacked = self.get_stacked_trajectories()
+    def get_quantiles(self, stacked: Dict[str, np.ndarray], quantiles: Optional[List[float]] = None) -> pd.DataFrame:
+        """
+        Compute quantiles across all trajectories.
+        """
+        if quantiles is None:
+            quantiles = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]
         
         # Create dates and quantiles first (these will be the same for all compartments)
         dates = []
@@ -65,7 +82,7 @@ class SimulationResults:
             "quantile": quantile_values
         }
         
-        # Add compartment data
+        # Add data
         for comp_name, comp_data in stacked.items():
             comp_quantiles = []
             for q in quantiles:
@@ -74,6 +91,20 @@ class SimulationResults:
             data[comp_name] = comp_quantiles
 
         return pd.DataFrame(data)
+    
+    def get_quantiles_transitions(self, quantiles: Optional[List[float]] = None) -> pd.DataFrame:
+        """
+        Compute quantiles across all trajectories for transitions.
+        """
+        stacked = self.get_stacked_transitions()
+        return self.get_quantiles(stacked, quantiles)
+    
+    def get_quantiles_compartments(self, quantiles: Optional[List[float]] = None) -> pd.DataFrame:
+        """
+        Compute quantiles across all trajectories for compartments.
+        """
+        stacked = self.get_stacked_compartments()
+        return self.get_quantiles(stacked, quantiles)
 
     def resample(self, freq: str, method: str = 'last', fill_method: str = 'ffill') -> 'SimulationResults':
         """Resample all trajectories to new frequency."""

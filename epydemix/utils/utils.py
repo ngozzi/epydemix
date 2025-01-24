@@ -115,28 +115,38 @@ def create_definitions(
 
 
 def format_simulation_output(
-        simulation_output: np.ndarray,
+        compartments_evolution: np.ndarray,
+        transitions_evolution: np.ndarray,
         compartments_idx: Dict[str, int],
-        Nk_names: List[str]
+        transitions_idx: Dict[str, int], 
+        demographics: List[str],
     ) -> Dict[str, np.ndarray]:
     """
-    Formats the simulation output into a dictionary with compartment and demographic information.
-
+    Format simulation output into dictionary with proper naming.
+    
     Args:
-        simulation_output (np.ndarray): A 3D array containing the simulation results.
-                                        The dimensions are expected to be (time_steps, compartments, demographics).
-        compartments_idx (Dict[str, int]): A dictionary mapping compartment names to their indices in the simulation_output.
-        Nk_names (List[str]): A list of demographic group names.
-
-    Returns:
-        Dict[str, np.ndarray]: A dictionary where keys are in the format "compartment_demographic" and values are 2D arrays (time_steps, values).
-                               An additional key "compartment_total" is included for each compartment, representing the sum across all demographics.
+        compartments_evolution: Array of shape (timesteps, n_compartments, n_demographics)
+        transitions_evolution: Array of shape (timesteps, n_transitions, n_demographics)
+        compartments_idx: Dictionary mapping compartment names to their indices
+        transitions_idx: Dictionary mapping transition names to their indices
+        demographics: List of demographic group names
     """
-    formatted_output = {}
+    formatted_output = {
+        "compartments": {},
+        "transitions": {}
+    }
     for comp, pos in compartments_idx.items(): 
-        for i, dem in enumerate(Nk_names): 
-            formatted_output[f"{comp}_{dem}"] = simulation_output[:, pos, i]
-        formatted_output[f"{comp}_total"] = np.sum(simulation_output[:, pos, :], axis=1)
+        for i, dem in enumerate(demographics): 
+            key = f"{comp}_{dem}"
+            formatted_output["compartments"][key] = compartments_evolution[:, pos, i]
+        formatted_output["compartments"][f"{comp}_total"] = np.sum(compartments_evolution[:, pos, :], axis=1)
+    
+    for trans, pos in transitions_idx.items(): 
+        for i, dem in enumerate(demographics): 
+            key = f"{trans}_{dem}"
+            formatted_output["transitions"][key] = transitions_evolution[:, pos, i]
+        formatted_output["transitions"][f"{trans}_total"] = np.sum(transitions_evolution[:, pos, :], axis=1)
+    
     return formatted_output
 
 
