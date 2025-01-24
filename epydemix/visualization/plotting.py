@@ -984,3 +984,116 @@ def plot_projections(projections: Any,
     if show_legend:
         ax.legend(pleg + [p_actual], handles + ["actual"], loc="upper left", frameon=False)
 
+
+def plot_trajectories(stacked: Dict[str, np.ndarray],
+                     columns: Union[List[str], str],
+                     data: Optional[pd.DataFrame] = None,
+                     ax: Optional[plt.Axes] = None,
+                     show_data: bool = False,
+                     alpha: float = 0.1,
+                     title: str = "",
+                     ylabel: str = "",
+                     xlabel: str = "",
+                     show_legend: bool = True,
+                     legend_loc: str = "upper left",
+                     palette: str = "Dark2",
+                     colors: Optional[Union[List[str], str]] = None,
+                     labels: Optional[Union[List[str], str]] = None,
+                     date_format: Optional[str] = None,
+                     y_scale: str = "linear",
+                     grid: bool = True,
+                     dates: Optional[np.ndarray] = None) -> plt.Axes:
+    """
+    Plots individual trajectories over time with optional observed data.
+
+    Args:
+        stacked: Dictionary mapping column names to arrays of shape (n_simulations, timesteps)
+        columns: Column name(s) to plot
+        data: Optional DataFrame containing observed data
+        ax: Matplotlib axes to plot on
+        show_data: Whether to show observed data points
+        alpha: Alpha value for individual trajectories
+        title: Plot title
+        ylabel: Y-axis label
+        xlabel: X-axis label
+        show_legend: Whether to show legend
+        legend_loc: Legend location
+        palette: Color palette name
+        colors: Custom colors for lines
+        labels: Custom labels for legend
+        date_format: Format string for dates
+        y_scale: Scale for y-axis ('linear' or 'log')
+        grid: Whether to show grid lines
+        dates: Array of dates for x-axis. If None, uses range(timesteps)
+
+    Returns:
+        plt.Axes: The matplotlib axes object
+    """
+    if not isinstance(columns, list):
+        columns = [columns]
+
+    if ax is None:
+        _, ax = plt.subplots(dpi=300, figsize=(10,4))
+
+    if colors is None:
+        colors = sns.color_palette(palette, len(columns))
+    elif not isinstance(colors, list):
+        colors = [colors]
+
+    if labels is None:
+        labels = columns
+    elif not isinstance(labels, list):
+        labels = [labels]
+
+    # Create x-axis values
+    if dates is None:
+        x = np.arange(stacked[columns[0]].shape[1])
+    else:
+        x = dates
+
+    # Plot each trajectory for each column
+    pleg = []
+    for column, color, label in zip(columns, colors, labels):
+        trajectories = stacked[column]
+        
+        # Plot individual trajectories
+        for traj in trajectories:
+            line = ax.plot(x, traj, color=color, alpha=alpha, linewidth=0.5, zorder=1)
+        
+        # Plot median trajectory with higher alpha
+        mean_traj = np.median(trajectories, axis=0)
+        line, = ax.plot(x, mean_traj, color=color, alpha=1.0, 
+                       linewidth=2, label=label, zorder=2)
+        pleg.append(line)
+
+    if show_data and data is not None:
+        p_actual = ax.scatter(x, data["data"], s=10, color="k", 
+                            zorder=3, label="observed")
+        if show_legend:
+            pleg.append(p_actual)
+
+    # Style improvements
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    
+    if grid:
+        ax.grid(axis="y", linestyle="--", linewidth=0.3, alpha=0.5, zorder=0)
+    
+    # Labels and formatting
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+    ax.set_yscale(y_scale)
+    
+    if date_format:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+    
+    if show_legend and pleg:
+        ax.legend(pleg, labels + (["observed"] if show_data and data is not None else []), 
+                 loc=legend_loc, frameon=False)
+    
+    plt.tight_layout()
+    
+    return ax
+
