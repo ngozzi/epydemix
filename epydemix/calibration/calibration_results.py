@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 import pandas as pd
 import numpy as np
 import datetime
@@ -18,6 +18,8 @@ class CalibrationResults:
         calibration_params: Dictionary of parameters used in calibration
         distances: Dictionary of distances per generation
         weights: Dictionary of weights per generation
+        projections: Dictionary of projections 
+        projection_parameters: Dictionary of projection parameters 
     """
     calibration_strategy: Optional[str] = None
     posterior_distributions: Dict[int, pd.DataFrame] = field(default_factory=dict)
@@ -27,6 +29,8 @@ class CalibrationResults:
     calibration_params: Dict[str, Any] = field(default_factory=dict)
     distances: Dict[int, List[Any]] = field(default_factory=dict)
     weights: Dict[int, List[Any]] = field(default_factory=dict)
+    projections: Dict[str, List[Any]]= field(default_factory=dict)
+    projection_parameters: Dict[str, pd.DataFrame] = field(default_factory=dict)
 
     def _get_generation(self, generation: Optional[int], data_dict: Dict[int, Any]) -> Any:
         """Helper method to get data for a specific generation."""
@@ -56,18 +60,10 @@ class CalibrationResults:
         """Gets the distances for a specific generation."""
         return self._get_generation(generation, self.distances)
 
-    def get_stacked_trajectories(self, generation: Optional[int] = None) -> Dict[str, np.ndarray]:
-        """
-        Stack individual simulation outputs into arrays.
-        
-        Args:
-            generation: Specific generation to analyze. If None, uses latest
-        
-        Returns:
-            Dict mapping variable names to arrays of shape (n_simulations, n_timesteps)
-        """
+    def get_calibration_trajectories(self, generation: Optional[int] = None) -> Dict[str, np.ndarray]:
+        """Get stacked trajectories from calibration results."""
         simulations = self.get_selected_trajectories(generation)
-        if simulations is None or len(simulations) == 0:
+        if simulations is None or len(simulations) == 0:  # Better check for empty simulations
             return {}
         
         return {
@@ -75,36 +71,49 @@ class CalibrationResults:
             for key in simulations[0].keys()
         }
 
-    def get_quantiles(self, 
-                     dates: Optional[List[datetime.date]] = None,
-                     quantiles: List[float] = [0.05, 0.5, 0.95],
-                     generation: Optional[int] = None,
-                     variables: Optional[List[str]] = None, 
-                     quantile_axis: int = 0, 
-                     length_axis: int = 1) -> pd.DataFrame:
-        """
-        Compute quantiles from stacked trajectories.
+    def get_projection_trajectories(self, scenario_id: str = "baseline") -> Dict[str, np.ndarray]:
+        """Get stacked trajectories from projection results."""
+        if scenario_id not in self.projections:
+            raise ValueError(f"No projections found for id {scenario_id}")
+        
+        simulations = self.projections[scenario_id]
+        if simulations is None or len(simulations) == 0:  # Better check for empty simulations
+            return {}
+        
+        return {
+            key: np.stack([sim[key] for sim in simulations], axis=0)
+            for key in simulations[0].keys()
+        }
 
-        Args:
-            dates: List of dates. If None, no dates will be added to the output
-            quantiles: List of quantiles
-            generation: Specific generation to get trajectories from. If None, uses latest
-            variables: List of variables to return. If None, returns all
-            quantile_axis: Axis to compute quantiles on. Default is 0
-            length_axis: Axis representing time dimension. Default is 1
+    def get_calibration_quantiles(self,
+                                dates: Optional[List[datetime.date]] = None,
+                                quantiles: List[float] = [0.05, 0.5, 0.95],
+                                generation: Optional[int] = None,
+                                variables: Optional[List[str]] = None) -> pd.DataFrame:
+        """Compute quantiles from calibration results."""
+        trajectories = self.get_calibration_trajectories(generation)
+        return self._compute_quantiles(trajectories, dates, quantiles, variables)
 
-        Returns:
-            pd.DataFrame: DataFrame with dates, quantiles, and variable values
-        """
-        trajectories = self.get_stacked_trajectories(generation)
-        if not trajectories:
-            return pd.DataFrame()
-            
+    def get_projection_quantiles(self,
+                               dates: Optional[List[datetime.date]] = None,
+                               quantiles: List[float] = [0.05, 0.5, 0.95],
+                               scenario_id: str = "baseline",
+                               variables: Optional[List[str]] = None) -> pd.DataFrame:
+        """Compute quantiles from projection results."""
+        trajectories = self.get_projection_trajectories(scenario_id)
+        return self._compute_quantiles(trajectories, dates, quantiles, variables)
+
+    def _compute_quantiles(self,
+                         trajectories: Dict[str, np.ndarray],
+                         dates: Optional[List[datetime.date]],
+                         quantiles: List[float],
+                         variables: Optional[List[str]]) -> pd.DataFrame:
+        """Helper method to compute quantiles from trajectories."""
         if variables:
             trajectories = {k: v for k, v in trajectories.items() if k in variables}
         
         if dates is None:
-            dates = np.arange(trajectories[list(trajectories.keys())[0]].shape[length_axis])
+            dates = np.arange(trajectories[list(trajectories.keys())[0]].shape[1])
 
         simulation_dates = []
         quantile_values = []
@@ -120,25 +129,46 @@ class CalibrationResults:
         for key, vals in trajectories.items():
             data[key] = [
                 val for q in quantiles 
-                for val in np.quantile(vals, q, axis=quantile_axis)
+                for val in np.quantile(vals, q, axis=0)
             ]
 
         return pd.DataFrame(data)
 
-    def get_trajectories(self,
-                        variables: Optional[List[str]] = None,
-                        generation: Optional[int] = None) -> Dict[str, np.ndarray]:
+    def run_projections(self, 
+                   simulation_function: Callable,
+                   projection_parameters: Dict[str, Any],
+                   iterations: int = 100,
+                   scenario_id: str = "baseline") -> None:
         """
-        Get raw trajectories for specified variables.
+        Run projections using the posterior distribution from calibration.
 
         Args:
-            variables: List of variables to return. If None, returns all
-            generation: Specific generation to get trajectories from. If None, uses latest
-
-        Returns:
-            Dictionary mapping variable names to trajectory arrays
+            simulation_function: Function that runs the simulation
+            projection_parameters: Dictionary of parameters for projections
+            iterations: Number of projection iterations to run
+            scenario_id: Identifier for this projection scenario projection.
         """
-        trajectories = self.get_selected_trajectories(generation)
-        if variables:
-            return {k: v for k, v in trajectories.items() if k in variables}
-        return trajectories
+        # Get posterior distribution
+        posterior_distribution = self.get_posterior_distribution()
+
+        # Run projections and store results
+        projections = []
+        posterior_samples = {}
+        
+        for _ in range(iterations):
+            # Sample from posterior and store samples
+            posterior_sample = posterior_distribution.iloc[np.random.randint(0, len(posterior_distribution))]
+            for k in posterior_sample.keys():
+                if k not in posterior_samples.keys():
+                    posterior_samples[k] = []
+                posterior_samples[k].append(posterior_sample[k])
+
+            # Run simulation with sampled parameters
+            sim_params = projection_parameters.copy()
+            sim_params.update(posterior_sample)
+            result = simulation_function(sim_params)
+            projections.append(result)
+
+        # Store results in class attributes
+        self.projections[scenario_id] = projections
+        self.projection_parameters[scenario_id] = pd.DataFrame(posterior_samples)

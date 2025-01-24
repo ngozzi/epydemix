@@ -260,7 +260,7 @@ def plot_posterior_distribution(posterior: pd.DataFrame,
                               figsize: Tuple[int, int] = (10, 4),
                               stat: str = "density",
                               bins: Union[int, str] = "auto",
-                              alpha: float = 0.6,
+                              alpha: float = 0.4,
                               vertical_lines: Optional[Dict[str, Dict[str, Any]]] = None,
                               **kwargs) -> plt.Axes:
     """
@@ -887,7 +887,7 @@ def plot_distance_distribution(distances: Union[np.ndarray, List[float], pd.Seri
                              ylim: Optional[Tuple[float, float]] = None,
                              stat: str = "density",
                              bins: Union[int, str] = "auto",
-                             alpha: float = 0.6,
+                             alpha: float = 0.4,
                              vertical_lines: Optional[Dict[str, Dict[str, Any]]] = None,
                              **kwargs) -> plt.Axes:
     """

@@ -124,8 +124,8 @@ def calibration_abc_top_fraction(simulation_function: Callable,
         simulation_function (Callable[[Dict[str, Any]], Any]): The function that runs the simulation, taking a dictionary of parameters as input.
         priors (Dict[str, Any]): A dictionary of prior distributions for the parameters.
         parameters (Dict[str, Any]): A dictionary of parameters used in the simulation.
-        data (Dict[str, Any]): A dictionary containing the observed data with a key "data" pointing to observations.
-        top_perc (float, optional): The top percentage of simulations to select based on the error metric (default is 0.05).
+        observed_data (Dict[str, Any]): A dictionary containing the observed data with a key "data" pointing to observations.
+        top_fraction (float, optional): The top fraction of simulations to select based on the error metric (default is 0.05).
         distance_function (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
         Nsim (int, optional): The number of simulation runs to perform (default is 100).
 
@@ -140,11 +140,10 @@ def calibration_abc_top_fraction(simulation_function: Callable,
     param_names = list(priors.keys())
 
     # Run simulations
-    for n in range(Nsim):
+    for _ in range(Nsim):
         params = sample_prior(priors, param_names)
         full_params = {**parameters, **dict(zip(param_names, params))}
         results = wrapper_function(simulation_function, full_params)
-        #results = simulation_function(full_params)
         distance = distance_function(data=observed_data, simulation=results)
         simulations.append(results)
         distances.append(distance)
@@ -158,9 +157,6 @@ def calibration_abc_top_fraction(simulation_function: Callable,
     # select runs and parameters
     selected_simulations = np.array(simulations)[idxs]
     selected_params = {p: np.array(arr)[idxs] for p, arr in sampled_params.items()}
-
-    # format selected simulations 
-    #selected_simulations = combine_simulation_outputs(selected_simulations)
 
     # format results 
     results = CalibrationResults(
@@ -192,17 +188,26 @@ def calibration_abc_smc(observed_data,
             minimum_epsilon=None, 
             max_time=None, 
             total_simulations_budget=None):
-    """Implements the ABC-SMC algorithm with a customizable simulation model.
-    observed_data: the observed dataset
-    num_particles: number of particles in each generation
-    num_generations: number of generations to run
-    epsilon_schedule: list of epsilon thresholds for each generation (optional)
-    priors: dictionary of parameter_name -> scipy.stats prior distribution
-    epsilon_quantile_level: quantile level to set next generation's epsilon (default 0.5)
-    perturbations: dictionary of parameter_name -> Perturbation objects (optional)
-    simulate_model: function that simulates data given a dictionary of parameters
-    user_params: dictionary of fixed parameters provided by the user (optional)
-    Returns: posterior samples
+    """
+    Implements the ABC-SMC algorithm with a customizable simulation model.
+
+    Args:
+        observed_data: the observed dataset
+        num_particles: number of particles in each generation
+        num_generations: number of generations to run
+        epsilon_schedule: list of epsilon thresholds for each generation (optional)
+        priors: dictionary of parameter_name -> scipy.stats prior distribution
+        epsilon_quantile_level: quantile level to set next generation's epsilon (default 0.5)
+        perturbations: dictionary of parameter_name -> Perturbation objects (optional)
+        distance_function: function that computes the distance between observed and simulated data
+        simulate_model: function that simulates data given a dictionary of parameters
+        user_params: dictionary of fixed parameters provided by the user (optional)
+        minimum_epsilon: minimum epsilon threshold (optional)
+        max_time: maximum time allowed for calibration (optional)
+        total_simulations_budget: maximum number of simulations allowed for calibration (optional)
+    
+    Returns: 
+        CalibrationResults: An object containing the results of the calibration, including the posterior distribution, selected trajectories, and quantiles.
     """
     if simulate_model is None:
         raise ValueError("A simulation model function must be provided.")
@@ -241,7 +246,6 @@ def calibration_abc_smc(observed_data,
         params = sample_prior(priors, param_names)
         full_params = {**user_params, **dict(zip(param_names, params))}
         simulated_data = wrapper_function(simulate_model, full_params)
-        #simulated_data = simulate_model(full_params)
         dist = distance_function(simulated_data, observed_data)
         particles.append(params)
         weights.append(1.0 / num_particles)
@@ -252,9 +256,6 @@ def calibration_abc_smc(observed_data,
     weights = np.array(weights)
     distances = np.array(distances)
     simulations = np.array(simulations)
-
-    # format selected simulations
-    #simulations = combine_simulation_outputs(simulations)
 
     # Set the results for the first generation
     results.posterior_distributions[0] = pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))})
@@ -315,7 +316,6 @@ def calibration_abc_smc(observed_data,
                   for i, param in enumerate(param_names)
                 ]
                 if all(prob > 0 for prob in prior_probabilities):
-                    #simulated_data = simulate_model(full_params)
                     simulated_data = wrapper_function(simulate_model, full_params)
                     dist = distance_function(simulated_data, observed_data)
                     n_simulations += 1
@@ -347,9 +347,6 @@ def calibration_abc_smc(observed_data,
         weights = new_weights
         distances = np.array(new_distances)
         simulations = np.array(new_simulations)
-
-        # format selected simulations 
-        #simulations = combine_simulation_outputs(simulations)
 
         # Set the results for the generation
         results.posterior_distributions[gen + 1] = pd.DataFrame(data={param_names[i]: particles[:, i] for i in range(len(param_names))})
@@ -397,12 +394,11 @@ def calibration_abc_rejection(simulation_function: Callable,
         priors (Dict[str, Any]): A dictionary of prior distributions for the parameters.
         parameters (Dict[str, Any]): A dictionary of model parameters.
         observed_data (Dict[str, Any]): The observed data.
-        tolerance (float): The error tolerance for accepting a simulation.
+        epsilon (float): The error tolerance for accepting a simulation.
         distance_function (Callable[[Dict[str, Any], Any], float], optional): The error metric function used to evaluate the simulations (default is rmse).
         num_particles (int, optional): The number of particles to accept based on the tolerance (default is 100).
-        include_quantiles (bool, optional): Whether to compute and include quantiles in the results (default is True).
-        dates_column (str, optional): The key used for simulation dates in the parameters dictionary (default is "simulation_dates").
-        n_jobs (int, optional): Number of parallel jobs for the ABC SMC process. Default is -1 (uses all available CPUs).
+        max_time: maximum time allowed for calibration (optional)
+        total_simulations_budget: maximum number of simulations allowed for calibration (optional)
 
     Returns:
         CalibrationResults: An object containing the results of the calibration, including the posterior distribution, selected trajectories, and quantiles.
@@ -420,7 +416,6 @@ def calibration_abc_rejection(simulation_function: Callable,
         params = sample_prior(priors, param_names)
         full_params = {**parameters, **dict(zip(param_names, params))}
         results = wrapper_function(simulation_function, full_params)
-        #results = simulation_function(full_params)
         distance = distance_function(data=observed_data, simulation=results)
         if distance < epsilon:
             simulations.append(results)
@@ -439,9 +434,6 @@ def calibration_abc_rejection(simulation_function: Callable,
         if total_simulations_budget is not None and n_simulations > total_simulations_budget:
             print(f"Total simulations budget reached")
             break
-
-    # format selected simulations
-    #simulations = combine_simulation_outputs(simulations)
 
     # format results 
     results = CalibrationResults(
