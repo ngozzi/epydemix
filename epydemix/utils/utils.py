@@ -267,26 +267,48 @@ def evaluate(expr: str, env: dict) -> any:
     return Expr(expr, model=eval_model).eval(env)
 
 
-def compute_simulation_dates(start_date: str, end_date: str, steps: Optional[int] = None) -> list:
+def compute_simulation_dates(start_date: Union[str, datetime.date, np.datetime64],
+                           end_date: Union[str, datetime.date, np.datetime64],
+                           steps: Optional[int] = None,
+                           dt: float = 1.0) -> np.ndarray:
     """
-    Computes a list of simulation dates based on the specified frequency or number of periods.
-
+    Compute simulation dates including sub-day intervals.
+    
     Args:
-        start_date (str): The start date for the simulation, formatted as "YYYY-MM-DD".
-        end_date (str): The end date for the simulation, formatted as "YYYY-MM-DD".
-        steps (int, optional): If None, generates a date range with daily frequency. 
-                               If an integer, generates a date range with the specified number of periods. Defaults to None.
-
+        start_date: Start date
+        end_date: End date
+        steps: Number of steps (if None, computed from dt)
+        dt: Time step in days (e.g., 1/3 for 8-hour intervals)
+    
     Returns:
-        list: A list of dates between `start_date` and `end_date` based on the specified frequency or 
-              number of periods. The list is formatted as `datetime.date` objects.
+        numpy array of datetime64 objects for each simulation step
     """
+    # Convert inputs to pandas Timestamp for consistent handling
+    if isinstance(start_date, str):
+        start_date = pd.Timestamp(start_date)
+    elif isinstance(start_date, np.datetime64):
+        start_date = pd.Timestamp(start_date)
+    
+    if isinstance(end_date, str):
+        end_date = pd.Timestamp(end_date)
+    elif isinstance(end_date, np.datetime64):
+        end_date = pd.Timestamp(end_date)
+    
+    # Calculate total duration in days
+    total_days = (end_date - start_date).total_seconds() / (24 * 3600)
+    
+    # Calculate number of steps if not provided
     if steps is None:
-        simulation_dates = pd.date_range(start=start_date, end=end_date, freq="d").tolist()
-    else: 
-        simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
-
-    return simulation_dates
+        steps = int(total_days / dt)
+    
+    # Create timestamps with proper sub-day intervals
+    timestamps = pd.date_range(
+        start=start_date,
+        periods=steps + 1,
+        freq=pd.Timedelta(days=dt)
+    ).values
+    
+    return timestamps
 
 
 def apply_initial_conditions(epimodel, initial_conditions_dict) -> np.ndarray:
@@ -358,48 +380,3 @@ def combine_simulation_outputs(
     for key in combined_simulation_outputs:
         combined_simulation_outputs[key] = np.array(combined_simulation_outputs[key])
     return combined_simulation_outputs
-
-
-def compute_quantiles(
-        simulation_outputs: Dict[str, np.ndarray],
-        simulation_dates: List[datetime.date],
-        quantiles: List[float] = [0.05, 0.5, 0.95], 
-        ) -> pd.DataFrame:
-    """
-    Computes quantiles from simulation outputs for each compartment and demographic group.
-
-    Args:
-        simulation_outputs (Dict[str, np.ndarray]): Dictionary where keys are compartment-demographic names 
-            and values are arrays of shape (n_simulations, n_timesteps) containing simulation results
-        quantiles (List[float], optional): List of quantiles to compute. Defaults to [0.05, 0.5, 0.95]
-
-    Returns:
-        Dict[str, Dict[float, np.ndarray]]: Nested dictionary where:
-            - First level keys are compartment-demographic names
-            - Second level keys are quantile values
-            - Values are arrays containing the quantile values for each timestep
-    """
-    # Create dates and quantiles first (these will be the same for all compartments)
-    dates = []
-    quantile_values = []
-    for q in quantiles:
-        dates.extend(simulation_dates)
-        quantile_values.extend([q] * len(simulation_dates))
-    
-    # Initialize data dictionary with dates and quantiles
-    data = {
-        "date": dates,
-        "quantile": quantile_values
-    }
-    
-    # Add compartment data
-    for comp_name, comp_data in simulation_outputs.items():
-        comp_quantiles = []
-        for q in quantiles:
-            quant_values = np.quantile(comp_data, q, axis=0)
-            comp_quantiles.extend(quant_values)
-        data[comp_name] = comp_quantiles
-
-    return pd.DataFrame(data)
-
-

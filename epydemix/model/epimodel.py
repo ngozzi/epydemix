@@ -6,8 +6,7 @@ import numpy as np
 import pandas as pd
 from numpy.random import multinomial
 from ..population.population import Population, load_epydemix_population
-import copy
-from typing import List, Dict, Optional, Union, Any, Tuple
+from typing import List, Dict, Optional, Union, Any
 
 
 class EpiModel:
@@ -804,8 +803,7 @@ def simulate(epimodel,
         raise ValueError("The model has no transitions defined. Please add transitions before running simulations.")
     
     # Compute the simulation dates
-    total_days = len(pd.date_range(start_date, end_date, freq="D"))
-    simulation_dates = compute_simulation_dates(start_date, end_date, steps=int(1 / dt) * total_days)
+    simulation_dates = compute_simulation_dates(start_date, end_date, dt=dt)
 
     # Compute initial conditions if needed
     if initial_conditions_dict is None:
@@ -847,10 +845,14 @@ def simulate(epimodel,
                             dates=simulation_dates, compartment_idx=epimodel.compartments_idx, 
                             transitions_idx=epimodel.transitions_idx, parameters=epimodel.parameters)
 
-    # Resample trajectories
-    trajectory = trajectory.resample(resample_frequency, resample_aggregation, fill_method)
-
-    # Return the trajectory
+    # Only resample if necessary
+    if resample_frequency is not None:
+        # Check if resampling is needed (simulation dates frequency != requested frequency)
+        sim_freq = pd.infer_freq(simulation_dates)
+        if sim_freq != resample_frequency:
+            trajectory = trajectory.resample(resample_frequency, 
+                                          resample_aggregation, 
+                                          fill_method)
     return trajectory
 
 
