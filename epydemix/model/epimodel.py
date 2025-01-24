@@ -7,7 +7,7 @@ import pandas as pd
 from numpy.random import multinomial
 from ..population.population import Population, load_epydemix_population
 from typing import List, Dict, Optional, Union, Any
-
+import copy
 
 class EpiModel:
     """
@@ -907,7 +907,8 @@ def stochastic_simulation(T: int,
 
             for tr in transitions:
                 target_idx = comp_indices[tr.target]
-                rate = evaluate(expr=tr.rate, env=parameters)[t]
+                env_copy = copy.deepcopy(parameters)
+                rate = evaluate(expr=tr.rate, env=env_copy)[t]
                 
                 if tr.agent is not None:
                     agent_idx = comp_indices[tr.agent]

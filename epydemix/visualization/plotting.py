@@ -25,10 +25,12 @@ def get_timeseries_data(df_quantiles: pd.DataFrame,
 
 def plot_quantiles(df_quantiles: pd.DataFrame,
                   columns: Union[List[str], str], 
+                  data: Optional[pd.DataFrame] = None,
                   ax: Optional[plt.Axes] = None,
                   lower_q: float = 0.05, 
                   upper_q: float = 0.95, 
-                  show_median: bool = True, 
+                  show_median: bool = True,
+                  show_data: bool = False,
                   ci_alpha: float = 0.3, 
                   title: str = "", 
                   ylabel: str = "",  
@@ -40,17 +42,19 @@ def plot_quantiles(df_quantiles: pd.DataFrame,
                   labels: Optional[Union[List[str], str]] = None,
                   date_format: Optional[str] = None, 
                   y_scale: str = "linear",  
-                  grid: bool = True) -> plt.Axes:  
+                  grid: bool = True) -> plt.Axes:
     """
-    Plots the quantiles for compartments over time.
+    Plots quantiles for compartments over time with optional observed data.
 
     Args:
-        df_quantiles (pd.DataFrame): DataFrame with columns: 'date', 'quantile', and data columns
+        df_quantiles: DataFrame with columns: 'date', 'quantile', and data columns
         columns: Column name(s) to plot
-        ax: Matplotlib axes to plot on. Creates new figure if None
+        data: Optional DataFrame containing observed data
+        ax: Matplotlib axes to plot on
         lower_q: Lower quantile value (0.05 = 5th percentile)
         upper_q: Upper quantile value (0.95 = 95th percentile)
         show_median: Whether to show median line
+        show_data: Whether to show observed data points
         ci_alpha: Alpha value for confidence interval shading
         title: Plot title
         ylabel: Y-axis label
@@ -60,14 +64,13 @@ def plot_quantiles(df_quantiles: pd.DataFrame,
         palette: Color palette name
         colors: Custom colors for lines
         labels: Custom labels for legend
-        date_format: Format string for dates (e.g., '%Y-%m-%d')
+        date_format: Format string for dates
         y_scale: Scale for y-axis ('linear' or 'log')
         grid: Whether to show grid lines
 
     Returns:
-        plt.Axes: The matplotlib axes object for further customization
+        plt.Axes: The matplotlib axes object
     """
-    
     if not isinstance(columns, list):
         columns = [columns]
 
@@ -79,139 +82,36 @@ def plot_quantiles(df_quantiles: pd.DataFrame,
     elif not isinstance(colors, list):
         colors = [colors]
 
-    if labels is not None and not isinstance(labels, list):
-        labels = [labels]
-    else:
+    if labels is None:
         labels = columns
+    elif not isinstance(labels, list):
+        labels = [labels]
 
+    pleg, handles = [], []
     for t, (column, color, label) in enumerate(zip(columns, colors, labels)):
         if show_median:
             df_med = get_timeseries_data(df_quantiles, column, 0.5)
-            ax.plot(df_med.date, df_med[column].values, 
-                   color=color, label=label, zorder=2)
+            p1, = ax.plot(df_med.date, df_med[column].values, 
+                         color=color, label=label, zorder=2)
 
         df_q1 = get_timeseries_data(df_quantiles, column, lower_q)
         df_q2 = get_timeseries_data(df_quantiles, column, upper_q)
-        ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values, 
-                       alpha=ci_alpha, color=color, linewidth=0., zorder=1)
-
-    # Style improvements
-    ax.spines["right"].set_visible(False)
-    ax.spines["top"].set_visible(False)
-    
-    if grid:
-        ax.grid(axis="y", linestyle="--", linewidth=0.3, alpha=0.5, zorder=0)
-    
-    # Labels
-    ax.set_title(title)
-    ax.set_ylabel(ylabel)
-    ax.set_xlabel(xlabel)
-    
-    # Scale
-    ax.set_yscale(y_scale)
-    
-    # Date formatting
-    if date_format:
-        ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-    
-    if show_legend:
-        ax.legend(loc=legend_loc, frameon=False)
-    
-    # Adjust layout to prevent label cutoff
-    plt.tight_layout()
-    
-    return ax
-
-
-def plot_selected_quantiles(df_quantiles: pd.DataFrame,
-                          data: pd.DataFrame,
-                          ax: Optional[plt.Axes] = None,
-                          show_data: bool = True,
-                          columns: Union[str, List[str]] = "data",
-                          lower_q: float = 0.05,
-                          upper_q: float = 0.95,
-                          show_median: bool = True,
-                          ci_alpha: float = 0.3,
-                          title: str = "",
-                          show_legend: bool = True,
-                          ylabel: str = "",
-                          xlabel: str = "",
-                          colors: Optional[Union[List[str], str]] = None,
-                          palette: str = "Dark2",
-                          legend_loc: str = "upper left",
-                          date_format: Optional[str] = None,
-                          y_scale: str = "linear",
-                          grid: bool = True,
-                          data_color: str = "k",
-                          data_size: float = 10,
-                          data_label: str = "actual") -> plt.Axes:
-    """
-    Plots the selected quantiles from the calibration results with observed data.
-
-    Args:
-        df_quantiles: DataFrame containing quantile data
-        data: DataFrame containing observed data
-        ax: Matplotlib axes to plot on. Creates new figure if None
-        show_data: Whether to show the observed data points
-        columns: Column name(s) to plot from the quantiles data
-        lower_q: Lower quantile to plot (e.g., 0.05 for 5th percentile)
-        upper_q: Upper quantile to plot (e.g., 0.95 for 95th percentile)
-        show_median: Whether to show the median line
-        ci_alpha: Alpha value for confidence interval shading
-        title: Plot title
-        show_legend: Whether to show the legend
-        ylabel: Y-axis label
-        xlabel: X-axis label
-        colors: Custom colors for lines. If None, uses palette
-        palette: Color palette name for automatic colors
-        legend_loc: Legend location
-        date_format: Format string for dates (e.g., '%Y-%m-%d')
-        y_scale: Scale for y-axis ('linear' or 'log')
-        grid: Whether to show grid lines
-        data_color: Color for observed data points
-        data_size: Size of observed data points
-        data_label: Label for observed data in legend
-
-    Returns:
-        plt.Axes: The matplotlib axes object
-    """
-    if not isinstance(columns, list):
-        columns = [columns]
-
-    if ax is None:
-        _, ax = plt.subplots(dpi=300, figsize=(10, 4))
-
-    if colors is None:
-        colors = sns.color_palette(palette, len(columns))
-    elif not isinstance(colors, list):
-        colors = [colors]
-
-    legend_elements = []
-    legend_labels = []
-
-    # Plot quantiles for each column
-    for column, color in zip(columns, colors):
+        p2 = ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values, 
+                            alpha=ci_alpha, color=color, linewidth=0., zorder=1)
+        
         if show_median:
-            df_med = get_timeseries_data(df_quantiles, column, 0.5)
-            line, = ax.plot(df_med.date, df_med[column].values, color=color, zorder=2)
+            pleg.append((p1, p2))
+            handles.append(f"{label} (median, {np.round((1 - lower_q * 2) * 100, 0)}% CI)")
+        else:
+            pleg.append(p2)
+            handles.append(f"{label} ({np.round((1 - lower_q * 2) * 100, 0)}% CI)")
 
-        df_q1 = get_timeseries_data(df_quantiles, column, lower_q)
-        df_q2 = get_timeseries_data(df_quantiles, column, upper_q)
-        fill = ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values,
-                             alpha=ci_alpha, color=color, linewidth=0, zorder=1)
-
-        if show_median:
-            legend_elements.append((line, fill))
-            legend_labels.append(f"median ({int((1 - lower_q * 2) * 100)}% CI)")
-
-    # Plot observed data
-    if show_data and "data" in data:
-        scatter = ax.scatter(df_q1.date, data["data"], s=data_size,
-                           color=data_color, zorder=3, label=data_label)
+    if show_data and data is not None:
+        p_actual = ax.scatter(df_quantiles.date.unique(), data["data"], 
+                            s=10, color="k", zorder=3, label="observed")
         if show_legend:
-            legend_elements.append(scatter)
-            legend_labels.append(data_label)
+            pleg.append(p_actual)
+            handles.append("observed")
 
     # Style improvements
     ax.spines["right"].set_visible(False)
@@ -219,26 +119,22 @@ def plot_selected_quantiles(df_quantiles: pd.DataFrame,
     
     if grid:
         ax.grid(axis="y", linestyle="--", linewidth=0.3, alpha=0.5, zorder=0)
-
-    # Set scales and labels
-    ax.set_yscale(y_scale)
+    
+    # Labels and formatting
+    ax.set_title(title)
     ax.set_ylabel(ylabel)
     ax.set_xlabel(xlabel)
-    ax.set_title(title)
-
-    # Date formatting
+    ax.set_yscale(y_scale)
+    
     if date_format:
         ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-
-    # Legend
-    if show_legend and legend_elements:
-        ax.legend(legend_elements, legend_labels,
-                 loc=legend_loc, frameon=False)
-
-    # Adjust layout
+    
+    if show_legend and pleg:
+        ax.legend(pleg, handles, loc=legend_loc, frameon=False)
+    
     plt.tight_layout()
-
+    
     return ax
 
 
