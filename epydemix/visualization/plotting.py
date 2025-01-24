@@ -40,7 +40,6 @@ def plot_quantiles(df_quantiles: pd.DataFrame,
                   palette: str = "Dark2", 
                   colors: Optional[Union[List[str], str]] = None,
                   labels: Optional[Union[List[str], str]] = None,
-                  date_format: Optional[str] = None, 
                   y_scale: str = "linear",  
                   grid: bool = True) -> plt.Axes:
     """
@@ -64,7 +63,6 @@ def plot_quantiles(df_quantiles: pd.DataFrame,
         palette: Color palette name
         colors: Custom colors for lines
         labels: Custom labels for legend
-        date_format: Format string for dates
         y_scale: Scale for y-axis ('linear' or 'log')
         grid: Whether to show grid lines
 
@@ -125,10 +123,6 @@ def plot_quantiles(df_quantiles: pd.DataFrame,
     ax.set_ylabel(ylabel)
     ax.set_xlabel(xlabel)
     ax.set_yscale(y_scale)
-    
-    if date_format:
-        ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
     
     if show_legend and pleg:
         ax.legend(pleg, handles, loc=legend_loc, frameon=False)
@@ -999,7 +993,6 @@ def plot_trajectories(stacked: Dict[str, np.ndarray],
                      palette: str = "Dark2",
                      colors: Optional[Union[List[str], str]] = None,
                      labels: Optional[Union[List[str], str]] = None,
-                     date_format: Optional[str] = None,
                      y_scale: str = "linear",
                      grid: bool = True,
                      dates: Optional[np.ndarray] = None) -> plt.Axes:
@@ -1021,7 +1014,6 @@ def plot_trajectories(stacked: Dict[str, np.ndarray],
         palette: Color palette name
         colors: Custom colors for lines
         labels: Custom labels for legend
-        date_format: Format string for dates
         y_scale: Scale for y-axis ('linear' or 'log')
         grid: Whether to show grid lines
         dates: Array of dates for x-axis. If None, uses range(timesteps)
@@ -1084,10 +1076,6 @@ def plot_trajectories(stacked: Dict[str, np.ndarray],
     ax.set_ylabel(ylabel)
     ax.set_xlabel(xlabel)
     ax.set_yscale(y_scale)
-    
-    if date_format:
-        ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
     
     if show_legend and pleg:
         ax.legend(pleg, labels + (["observed"] if show_data and data is not None else []), 

@@ -335,6 +335,7 @@ class EpiModel:
         """Get total number of compartments."""
         return len(self.compartments)
 
+    
     def clear_compartments(self) -> None: 
         """
         This method resets the `compartments` list and clears the `compartments_idx` dictionary.
@@ -504,6 +505,7 @@ class EpiModel:
         """Get total number of transitions."""
         return len(self.transitions_idx)
         
+    
     def clear_transitions(self) -> None:
         """
         Clears all transitions from the model.
@@ -812,13 +814,12 @@ def simulate(epimodel,
     # Compute the contact reductions based on the interventions
     epimodel.compute_contact_reductions(simulation_dates)
 
-    # Overwrite parameters if any are provided via kwargs (needed for calibration purposes)
-    for k, v in kwargs.items():
-        if k in epimodel.parameters:
-            epimodel.parameters[k] = v
+    # Update parameters if any are provided via kwargs (needed for calibration purposes)
+    parameters = epimodel.parameters.copy()
+    parameters.update(kwargs)
 
     # Compute the definitions and apply overrides
-    epimodel.definitions = create_definitions(epimodel.parameters, len(simulation_dates), epimodel.population.Nk.shape[0])
+    epimodel.definitions = create_definitions(parameters, len(simulation_dates), epimodel.population.Nk.shape[0])
     epimodel.definitions = apply_overrides(epimodel.definitions, epimodel.overrides, simulation_dates)
 
     # Initialize population in different compartments and demographic groups
@@ -843,7 +844,7 @@ def simulate(epimodel,
                                        epimodel.population.Nk_names)
     trajectory = Trajectory(compartments=results["compartments"], transitions=results["transitions"], 
                             dates=simulation_dates, compartment_idx=epimodel.compartments_idx, 
-                            transitions_idx=epimodel.transitions_idx, parameters=epimodel.parameters)
+                            transitions_idx=epimodel.transitions_idx, parameters=epimodel.definitions)
 
     # Only resample if necessary
     if resample_frequency is not None:
