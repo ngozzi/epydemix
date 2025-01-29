@@ -24,9 +24,12 @@ class Perturbation(ABC):
 
 
 class DefaultPerturbationContinuous(Perturbation):
+    """
+    Componenent-wise normal perturbation kernel with adaptive standard deviation (Beaumont et al. (2009)).
+    """
     def __init__(self, param_name):
         super().__init__(param_name)
-        self.std = 0.1  # Default standard deviation
+        self.std = 0.1  
 
     def propose(self, x):
         """Propose a new value based on the current value."""
@@ -37,20 +40,19 @@ class DefaultPerturbationContinuous(Perturbation):
         return norm.pdf(x, center, self.std)
 
     def update(self, particles, weights, param_names):
-        """Update the standard deviation based on weighted particles using Silverman's rule of thumb."""
+        """Update the standard deviation based on previous generation variance."""
         index = param_names.index(self.param_name)
         values = particles[:, index]
-        std = np.sqrt(np.cov(values, aweights=weights))
-        n_eff = 1 / np.sum(weights**2)  # Effective sample size
-        self.std = std * ((3 / 4 * n_eff)**(-1/5))  # Silverman's rule of thumb with correction
+        std = np.std(values)
+        self.std = std * np.sqrt(2)
 
 
 class DefaultPerturbationDiscrete(Perturbation):
     def __init__(self, param_name, prior, jump_probability=0.3):
         super().__init__(param_name)
-        self.prior = prior  # The prior distribution for the discrete parameter
+        self.prior = prior  
         self.jump_probability = jump_probability
-        self.support = np.unique(self.prior.rvs(size=1000))  # Estimate support from samples
+        self.support = np.arange(self.prior.support()[0], self.prior.support()[1]+1)
 
     def propose(self, x):
         """Propose a new value for the discrete parameter."""
@@ -59,7 +61,7 @@ class DefaultPerturbationDiscrete(Perturbation):
             while proposed == x:
                 proposed = np.random.choice(self.support)
             return proposed
-        return x  # Stay at the current value
+        return x 
 
     def pdf(self, x, center):
         """Transition probability for the discrete parameter."""
@@ -71,7 +73,7 @@ class DefaultPerturbationDiscrete(Perturbation):
 
     def update(self, particles, weights, param_names):
         """Update jump_probability or other characteristics if needed."""
-        pass  # For now, no update logic is required
+        pass 
 
 
 def sample_prior(priors, param_names):

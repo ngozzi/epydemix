@@ -246,7 +246,7 @@ def calibration_abc_smc(observed_data,
         params = sample_prior(priors, param_names)
         full_params = {**user_params, **dict(zip(param_names, params))}
         simulated_data = wrapper_function(simulate_model, full_params)
-        dist = distance_function(simulated_data, observed_data)
+        dist = distance_function(data=observed_data, simulation=simulated_data)
         particles.append(params)
         weights.append(1.0 / num_particles)
         distances.append(dist)
@@ -317,7 +317,7 @@ def calibration_abc_smc(observed_data,
                 ]
                 if all(prob > 0 for prob in prior_probabilities):
                     simulated_data = wrapper_function(simulate_model, full_params)
-                    dist = distance_function(simulated_data, observed_data)
+                    dist = distance_function(data=observed_data, simulation=simulated_data)
                     n_simulations += 1
 
                     if dist < epsilon:

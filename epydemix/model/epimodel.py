@@ -775,7 +775,8 @@ def simulate(epimodel,
              percentage_in_agents: float = 0.0005,
              dt: Optional[float] = 1.,
              resample_frequency: Optional[str] = "D",
-             resample_aggregation: Optional[Union[str, dict]] = "last",
+             resample_aggregation_compartments: Optional[Union[str, dict]] = "last",
+             resample_aggregation_transitions: Optional[Union[str, dict]] = "sum",
              fill_method: Optional[str] = "ffill",
              **kwargs) -> Trajectory:
     """
@@ -789,7 +790,8 @@ def simulate(epimodel,
         percentage_in_agents (float, optional): The percentage of the population to initialize in the agents compartment.
         dt (float, optional): The time step for the simulation, expressed in days. Default is 1 (day).
         resample_frequency (str, optional): The frequency at which to resample the simulation results. Default is "D" (daily).
-        resample_aggregation (str, optional): The aggregation method to use when resampling the simulation results. Default is "sum".
+        resample_aggregation_compartments (str, optional): The aggregation method to use when resampling the compartments. Default is "last".
+        resample_aggregation_transitions (str, optional): The aggregation method to use when resampling the transitions. Default is "sum".
         fill_method (str, optional): The method to use when filling NaN values after resampling. Default is "ffill".
         **kwargs: Additional parameters to overwrite model parameters during the simulation.
 
@@ -852,8 +854,9 @@ def simulate(epimodel,
         sim_freq = pd.infer_freq(simulation_dates)
         if sim_freq != resample_frequency:
             trajectory = trajectory.resample(resample_frequency, 
-                                          resample_aggregation, 
-                                          fill_method)
+                                             resample_aggregation_compartments, 
+                                             resample_aggregation_transitions, 
+                                             fill_method)
     return trajectory
 
 

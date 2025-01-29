@@ -23,13 +23,14 @@ class Trajectory:
     transitions_idx: Dict[str, int]
     parameters: Dict[str, Any]
 
-    def resample(self, freq: str, method: str = 'last', fill_method: str = 'ffill') -> 'Trajectory':
+    def resample(self, freq: str, method_compartments: str = 'last', method_transitions: str = 'sum', fill_method: str = 'ffill') -> 'Trajectory':
         """
         Resample trajectory to new frequency.
         
         Args:
             freq (str): Frequency for resampling (e.g., 'D' for daily, 'W' for weekly)
-            method (str): Aggregation method for resampling. Default is 'last'
+            method_compartments (str): Aggregation method for compartments. Default is 'last'
+            method_transitions (str): Aggregation method for transitions. Default is 'sum'
             fill_method (str): Method to fill NaN values after resampling. Options are:
                 - 'ffill': Forward fill (use last valid observation)
                 - 'bfill': Backward fill (use next valid observation)
@@ -47,22 +48,21 @@ class Trajectory:
 
         # Resample compartments
         df_comp = pd.DataFrame(self.compartments, index=self.dates)
-        df_comp_resampled = df_comp.resample(freq).agg(method)
+        df_comp_resampled = df_comp.resample(freq).agg(method_compartments)
         
         # Resample transitions
         df_trans = pd.DataFrame(self.transitions, index=self.dates)
-        df_trans_resampled = df_trans.resample(freq).agg(method)
+        df_trans_resampled = df_trans.resample(freq).agg(method_transitions)
         
         # Handle NaN values
         if fill_method == 'interpolate':
             df_comp_resampled = df_comp_resampled.interpolate(method='linear')
-            df_trans_resampled = df_trans_resampled.interpolate(method='linear')
             # Handle edge cases
             df_comp_resampled = df_comp_resampled.fillna(method='ffill').fillna(method='bfill')
-            df_trans_resampled = df_trans_resampled.fillna(method='ffill').fillna(method='bfill')
+            df_trans_resampled = df_trans_resampled.fillna(0)
         else:
             df_comp_resampled = df_comp_resampled.fillna(method=fill_method)
-            df_trans_resampled = df_trans_resampled.fillna(method=fill_method)
+            df_trans_resampled = df_trans_resampled.fillna(0)
 
         return Trajectory(
             compartments={k: np.array(v) for k, v in df_comp_resampled.items()},

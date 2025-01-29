@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional, Callable
 import pandas as pd
 import numpy as np
 import datetime
+import copy
 
 @dataclass
 class CalibrationResults:
@@ -134,41 +135,34 @@ class CalibrationResults:
 
         return pd.DataFrame(data)
 
-    def run_projections(self, 
-                   simulation_function: Callable,
-                   projection_parameters: Dict[str, Any],
-                   iterations: int = 100,
-                   scenario_id: str = "baseline") -> None:
+    def copy(self) -> 'CalibrationResults':
         """
-        Run projections using the posterior distribution from calibration.
-
-        Args:
-            simulation_function: Function that runs the simulation
-            projection_parameters: Dictionary of parameters for projections
-            iterations: Number of projection iterations to run
-            scenario_id: Identifier for this projection scenario projection.
-        """
-        # Get posterior distribution
-        posterior_distribution = self.get_posterior_distribution()
-
-        # Run projections and store results
-        projections = []
-        posterior_samples = {}
+        Create a deep copy of the CalibrationResults object.
         
-        for _ in range(iterations):
-            # Sample from posterior and store samples
-            posterior_sample = posterior_distribution.iloc[np.random.randint(0, len(posterior_distribution))]
-            for k in posterior_sample.keys():
-                if k not in posterior_samples.keys():
-                    posterior_samples[k] = []
-                posterior_samples[k].append(posterior_sample[k])
-
-            # Run simulation with sampled parameters
-            sim_params = projection_parameters.copy()
-            sim_params.update(posterior_sample)
-            result = simulation_function(sim_params)
-            projections.append(result)
-
-        # Store results in class attributes
-        self.projections[scenario_id] = projections
-        self.projection_parameters[scenario_id] = pd.DataFrame(posterior_samples)
+        Returns:
+            CalibrationResults: A new CalibrationResults object with copied data
+        """
+        return CalibrationResults(
+            calibration_strategy=self.calibration_strategy,
+            posterior_distributions={
+                gen: df.copy() for gen, df in self.posterior_distributions.items()
+            },
+            selected_trajectories={
+                gen: copy.deepcopy(traj) for gen, traj in self.selected_trajectories.items()
+            },
+            distances={
+                gen: dist.copy() for gen, dist in self.distances.items()
+            },
+            weights={
+                gen: w.copy() for gen, w in self.weights.items()
+            } if self.weights is not None else None,
+            projections={
+                scenario: copy.deepcopy(proj) for scenario, proj in self.projections.items()
+            } if self.projections is not None else {},
+            projection_parameters={
+                scenario: params.copy() for scenario, params in self.projection_parameters.items()
+            } if self.projection_parameters is not None else {},
+            observed_data=copy.deepcopy(self.observed_data),
+            priors=copy.deepcopy(self.priors),
+            calibration_params=copy.deepcopy(self.calibration_params)
+        )
