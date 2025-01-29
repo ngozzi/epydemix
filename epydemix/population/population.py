@@ -128,12 +128,24 @@ class Population:
         Adds a contact matrix for a specified layer.
 
         Args:
-            contact_matrix (np.ndarray): The contact matrix to be added, representing contact patterns between different demographic groups.
-            layer_name (str, optional): The name of the contact layer (e.g., "home", "work"). Defaults to "all".
+            contact_matrix (np.ndarray): The contact matrix to be added, representing contact patterns 
+                between different demographic groups.
+            layer_name (str, optional): The name of the contact layer (e.g., "home", "work"). 
+                Defaults to "all". Cannot be "overall" as it's reserved.
+        
+        Raises:
+            ValueError: If contact_matrix is not a 2D square array or if layer_name is "overall"
         
         Returns:
             None
         """
+        # Validate layer name
+        if layer_name == "overall":
+            raise ValueError(
+                '"overall" is a reserved layer name used for total contacts. '
+                'Please use a different name for this layer.'
+            )
+        
         # Cast contact_matrix to a numpy array
         contact_matrix = np.array(contact_matrix)
 
@@ -142,6 +154,7 @@ class Population:
             raise ValueError("Contact matrix must be a 2D square numpy array.")
         
         self.contact_matrices[layer_name] = contact_matrix
+        
 
 
     def add_population(self, Nk: List[float], 
@@ -177,6 +190,117 @@ class Population:
         
         self.Nk_names = Nk_names
         self.Nk = Nk
+        
+
+    @property
+    def total_population(self) -> float:
+        """
+        Total population across all demographic groups.
+        
+        Returns:
+            float: Sum of population in all demographic groups
+        """
+        return float(np.sum(self.Nk))
+    
+    @property
+    def num_groups(self) -> int:
+        """
+        Number of demographic groups.
+        
+        Returns:
+            int: Number of demographic groups in the population
+        """
+        return len(self.Nk)
+    
+    @property
+    def layers(self) -> List[str]:
+        """
+        Available contact matrix layers.
+        
+        Returns:
+            List[str]: Names of available contact layers (e.g., ['home', 'work', 'school'])
+        """
+        return list(self.contact_matrices.keys())
+    
+    @property
+    def total_contacts(self) -> Dict[str, float]:
+        """
+        Total number of contacts per layer.
+        
+        Returns:
+            Dict[str, float]: Dictionary mapping layer names to total contacts
+        """
+        return {
+            layer: float(np.sum(matrix * self.Nk[:, np.newaxis]))
+            for layer, matrix in self.contact_matrices.items()
+        }
+    
+    @property
+    def mean_contacts(self) -> Dict[str, float]:
+        """
+        Mean number of contacts per person per layer.
+        
+        Returns:
+            Dict[str, float]: Dictionary mapping layer names to mean contacts per person
+        """
+        return {
+            layer: total / self.total_population
+            for layer, total in self.total_contacts.items()
+        }
+
+    def validate(self) -> None:
+        """
+        Validate all aspects of population data consistency.
+        Raises ValueError if any validation fails.
+        """
+        self._validate_population_data()
+        self._validate_contact_matrices()
+        self._validate_demographic_names()
+
+    def _validate_population_data(self) -> None:
+        """
+        Validate population size data.
+        """
+        if len(self.Nk) == 0:
+            raise ValueError("No population data has been added")
+            
+        if len(self.Nk) != len(self.Nk_names):
+            raise ValueError(
+                f"Mismatch between population sizes ({len(self.Nk)}) "
+                f"and names ({len(self.Nk_names)})"
+            )
+            
+        if np.any(self.Nk < 0):
+            raise ValueError("Population sizes cannot be negative")
+            
+        if np.any(~np.isfinite(self.Nk)):
+            raise ValueError("Population sizes must be finite")
+
+    def _validate_contact_matrices(self) -> None:
+        """
+        Validate contact matrices for all layers.
+        """
+        
+        for layer, matrix in self.contact_matrices.items():
+
+            # Check for negative values
+            if np.any(matrix < 0):
+                raise ValueError(
+                    f"Contact matrix '{layer}' contains negative values"
+                )
+                
+            # Check for non-finite values
+            if np.any(~np.isfinite(matrix)):
+                raise ValueError(
+                    f"Contact matrix '{layer}' contains non-finite values"
+                )
+
+    def _validate_demographic_names(self) -> None:
+        """
+        Validate demographic group names.
+        """
+        if len(set(self.Nk_names)) != len(self.Nk_names):
+            raise ValueError("Duplicate demographic group names found")
 
 
 def map_age_groups_to_idx(age_group_mapping: Dict[str, List[str]], 

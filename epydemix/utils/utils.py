@@ -5,7 +5,7 @@ import datetime
 import random
 import string
 from evalidate import Expr, base_eval_model
-from typing import Union, Dict, List, Any, Optional
+from typing import Union, Dict, List, Any, Optional, Tuple
 
 def is_scalar(value):
     return np.isscalar(value) and not isinstance(value, (str, bytes))
@@ -114,123 +114,40 @@ def create_definitions(
     return definitions
 
 
-def compute_quantiles(
-        data: Dict[str, np.ndarray],
-        simulation_dates: List[Union[str, pd.Timestamp]],
-        axis: int = 0,
-        quantiles: List[float] = [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975],
-        resample_frequency: Optional[str] = "D", 
-        resample_aggregation: str = "last"
-    ) -> pd.DataFrame:
-    """
-    Computes the specified quantiles for each key in the provided data over the given dates.
-
-    Args:
-        data (Dict[str, np.ndarray]): A dictionary where keys represent different data categories 
-                                      (e.g., compartments, demographic groups) and values are arrays 
-                                      containing the simulation results.
-        simulation_dates (List[Union[str, pd.Timestamp]]): The dates corresponding to the simulation time steps.
-        axis (int, optional): The axis along which to compute the quantiles (default is 0).
-        quantiles (List[float], optional): A list of quantiles to compute for the simulation results 
-                                            (default is [0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]).
-        resample_frequency (str, optional): A Pandas-compatible frequency string (e.g., 'W', 'M') 
-                                            for resampling the data before computing quantiles. Default is 'D'.
-        resample_aggregation (str, optional): The aggregation method to use when resampling the data. Default is 'sum'.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the quantile values for each data category and date.
-                      The DataFrame has columns for the data category, quantile, and date.
-    """
-    # Ensure simulation_dates are a Pandas DatetimeIndex
-    simulation_dates = pd.to_datetime(simulation_dates)
-    dict_quantiles = {k: [] for k in data.keys()}
-    dict_quantiles["quantile"] = []
-    dict_quantiles["date"] = []
-
-    # Resample the data if resample_frequency is specified
-    if resample_frequency:
-        resampled_data = {}
-        resampled_dates = []
-        for k, v in data.items():
-            # Create a temporary DataFrame for resampling
-            temp_df = pd.DataFrame(v.T, index=simulation_dates)
-            # Resample and take the mean (you can customize aggregation here)
-            resampled_temp_df = temp_df.resample(resample_frequency).agg(resample_aggregation)
-            # Fill nan values 
-            resampled_temp_df = resampled_temp_df.fillna(method='ffill')
-            resampled_data[k] = resampled_temp_df.values.T
-            resampled_dates = resampled_temp_df.index  # Same for all keys
-        data = resampled_data
-        simulation_dates = resampled_dates
-
-    # Compute quantiles
-    for q in quantiles:
-        for k, v in data.items():
-            arrq = np.quantile(v, axis=axis, q=q)
-            dict_quantiles[k].extend(arrq)
-        dict_quantiles["quantile"].extend([q] * len(arrq))
-        dict_quantiles["date"].extend(simulation_dates)
-
-    df_quantile = pd.DataFrame(data=dict_quantiles)
-    return df_quantile
-
-
 def format_simulation_output(
-        simulation_output: np.ndarray,
+        compartments_evolution: np.ndarray,
+        transitions_evolution: np.ndarray,
         compartments_idx: Dict[str, int],
-        Nk_names: List[str]
+        transitions_idx: Dict[str, int], 
+        demographics: List[str],
     ) -> Dict[str, np.ndarray]:
     """
-    Formats the simulation output into a dictionary with compartment and demographic information.
-
+    Format simulation output into dictionary with proper naming.
+    
     Args:
-        simulation_output (np.ndarray): A 3D array containing the simulation results.
-                                        The dimensions are expected to be (time_steps, compartments, demographics).
-        compartments_idx (Dict[str, int]): A dictionary mapping compartment names to their indices in the simulation_output.
-        Nk_names (List[str]): A list of demographic group names.
-
-    Returns:
-        Dict[str, np.ndarray]: A dictionary where keys are in the format "compartment_demographic" and values are 2D arrays (time_steps, values).
-                               An additional key "compartment_total" is included for each compartment, representing the sum across all demographics.
+        compartments_evolution: Array of shape (timesteps, n_compartments, n_demographics)
+        transitions_evolution: Array of shape (timesteps, n_transitions, n_demographics)
+        compartments_idx: Dictionary mapping compartment names to their indices
+        transitions_idx: Dictionary mapping transition names to their indices
+        demographics: List of demographic group names
     """
-    formatted_output = {}
+    formatted_output = {
+        "compartments": {},
+        "transitions": {}
+    }
     for comp, pos in compartments_idx.items(): 
-        for i, dem in enumerate(Nk_names): 
-            formatted_output[f"{comp}_{dem}"] = simulation_output[:, pos, i]
-        formatted_output[f"{comp}_total"] = np.sum(simulation_output[:, pos, :], axis=1)
+        for i, dem in enumerate(demographics): 
+            key = f"{comp}_{dem}"
+            formatted_output["compartments"][key] = compartments_evolution[:, pos, i]
+        formatted_output["compartments"][f"{comp}_total"] = np.sum(compartments_evolution[:, pos, :], axis=1)
+    
+    for trans, pos in transitions_idx.items(): 
+        for i, dem in enumerate(demographics): 
+            key = f"{trans}_{dem}"
+            formatted_output["transitions"][key] = transitions_evolution[:, pos, i]
+        formatted_output["transitions"][f"{trans}_total"] = np.sum(transitions_evolution[:, pos, :], axis=1)
+    
     return formatted_output
-
-
-def combine_simulation_outputs(
-        simulation_outputs_list: List[Dict[str, np.ndarray]]
-        ) -> Dict[str, List[np.ndarray]]:
-    """
-    Combines multiple simulation outputs into a single dictionary by appending new outputs to existing keys.
-
-    Args:
-        simulation_outputs_list (List[Dict[str, np.ndarray]]): A list of dictionaries containing the latest simulation output to be combined.
-                                                              Each dictionary contains keys corresponding to compartment-demographic names and values are arrays of simulation results.
-    Returns:
-        Dict[str, List[np.ndarray]]: A dictionary where keys are compartment-demographic names and values are lists of arrays.
-                                     Each list contains simulation results accumulated from multiple runs.
-    """
-    combined_simulation_outputs = {}    
-    for simulation_outputs in simulation_outputs_list:
-        if not combined_simulation_outputs:
-            # If combined_dict is empty, initialize it with the new dictionary
-            for key in simulation_outputs:
-                combined_simulation_outputs[key] = [simulation_outputs[key]]
-        else:
-            # If combined_dict already has keys, append the new dictionary's values
-            for key in simulation_outputs:
-                if key in combined_simulation_outputs:
-                    combined_simulation_outputs[key].append(simulation_outputs[key])
-                else:
-                    combined_simulation_outputs[key] = [simulation_outputs[key]]
-    # cast lists to arrays
-    for key in combined_simulation_outputs:
-        combined_simulation_outputs[key] = np.array(combined_simulation_outputs[key])
-    return combined_simulation_outputs
 
 
 def str_to_date(date_str: str) -> datetime.date:
@@ -273,26 +190,41 @@ def apply_overrides(
     Raises:
         ValueError: If the `override` values do not match the expected shape for the specified date ranges.
     """
+    if not overrides:
+        return definitions
+    
+    result = definitions.copy()
+    
     for name, overrides in overrides.items():
-        if name in definitions:
-            values = definitions[name]
-            for override in overrides:
-                start_date = str_to_date(override["start_date"])
-                end_date = str_to_date(override["end_date"])
-                override_value = override["value"]
+        if name not in definitions:
+            continue
+        #values = definitions[name]
+        for override in overrides:
+            #start_date = str_to_date(override["start_date"])
+            #end_date = str_to_date(override["end_date"])
+            start_date = pd.Timestamp(override["start_date"])
+            end_date = pd.Timestamp(override["end_date"])
+            override_value = override["value"]
 
-                # validate override value
-                T, n_age = sum(start_date <= d.date() <= end_date for d in dates), definitions[name].shape[1]
-                validate_parameter_shape(name, override_value, T=T, n_age=n_age)
+            # Convert dates to pandas timestamps for comparison
+            dates_pd = pd.DatetimeIndex(dates)
 
-                # resize override value
-                override_value = resize_parameter(override_value, T=T, n_age=n_age)
+            # validate override value
+            T = sum((dates_pd >= start_date) & (dates_pd <= end_date))
+            n_age = definitions[name].shape[1]
+            validate_parameter_shape(name, override_value, T=T, n_age=n_age)
 
-                # override
-                override_idxs = [i for i, date in enumerate(dates) if start_date <= date.date() <= end_date]
-                values[override_idxs] = override_value
+            # resize override value
+            override_array = resize_parameter(override_value, T=T, n_age=n_age)
 
-    return definitions
+            # override
+            #override_idxs = [i for i, date in enumerate(dates) if start_date <= date.date() <= end_date]
+            #values[override_idxs] = override_value
+            # Apply override
+            mask = (dates_pd >= start_date) & (dates_pd <= end_date)
+            result[name][mask] = override_array
+
+    return result
 
 
 def generate_unique_string(length: int = 12) -> str:
@@ -350,26 +282,48 @@ def evaluate(expr: str, env: dict) -> any:
     return Expr(expr, model=eval_model).eval(env)
 
 
-def compute_simulation_dates(start_date: str, end_date: str, steps: Optional[int] = None) -> list:
+def compute_simulation_dates(start_date: Union[str, datetime.date, np.datetime64],
+                           end_date: Union[str, datetime.date, np.datetime64],
+                           steps: Optional[int] = None,
+                           dt: float = 1.0) -> np.ndarray:
     """
-    Computes a list of simulation dates based on the specified frequency or number of periods.
-
+    Compute simulation dates including sub-day intervals.
+    
     Args:
-        start_date (str): The start date for the simulation, formatted as "YYYY-MM-DD".
-        end_date (str): The end date for the simulation, formatted as "YYYY-MM-DD".
-        steps (int, optional): If None, generates a date range with daily frequency. 
-                               If an integer, generates a date range with the specified number of periods. Defaults to None.
-
+        start_date: Start date
+        end_date: End date
+        steps: Number of steps (if None, computed from dt)
+        dt: Time step in days (e.g., 1/3 for 8-hour intervals)
+    
     Returns:
-        list: A list of dates between `start_date` and `end_date` based on the specified frequency or 
-              number of periods. The list is formatted as `datetime.date` objects.
+        numpy array of datetime64 objects for each simulation step
     """
+    # Convert inputs to pandas Timestamp for consistent handling
+    if isinstance(start_date, str):
+        start_date = pd.Timestamp(start_date)
+    elif isinstance(start_date, np.datetime64):
+        start_date = pd.Timestamp(start_date)
+    
+    if isinstance(end_date, str):
+        end_date = pd.Timestamp(end_date)
+    elif isinstance(end_date, np.datetime64):
+        end_date = pd.Timestamp(end_date)
+    
+    # Calculate total duration in days
+    total_days = (end_date - start_date).total_seconds() / (24 * 3600)
+    
+    # Calculate number of steps if not provided
     if steps is None:
-        simulation_dates = pd.date_range(start=start_date, end=end_date, freq="d").tolist()
-    else: 
-        simulation_dates = pd.date_range(start=start_date, end=end_date, periods=steps).tolist()
-
-    return simulation_dates
+        steps = int(total_days / dt)
+    
+    # Create timestamps with proper sub-day intervals
+    timestamps = pd.date_range(
+        start=start_date,
+        periods=steps + 1,
+        freq=pd.Timedelta(days=dt)
+    ).values
+    
+    return timestamps
 
 
 def apply_initial_conditions(epimodel, initial_conditions_dict) -> np.ndarray:
@@ -409,3 +363,35 @@ def convert_to_2Darray(lst: List[Any]) -> np.ndarray:
     arr = np.array(lst)
     arr = arr.reshape(1, len(lst))
     return arr
+
+
+def combine_simulation_outputs(
+        simulation_outputs_list: List[Dict[str, np.ndarray]]
+        ) -> Dict[str, List[np.ndarray]]:
+    """
+    Combines multiple simulation outputs into a single dictionary by appending new outputs to existing keys.
+
+    Args:
+        simulation_outputs_list (List[Dict[str, np.ndarray]]): A list of dictionaries containing the latest simulation output to be combined.
+                                                              Each dictionary contains keys corresponding to compartment-demographic names and values are arrays of simulation results.
+    Returns:
+        Dict[str, List[np.ndarray]]: A dictionary where keys are compartment-demographic names and values are lists of arrays.
+                                     Each list contains simulation results accumulated from multiple runs.
+    """
+    combined_simulation_outputs = {}    
+    for simulation_outputs in simulation_outputs_list:
+        if not combined_simulation_outputs:
+            # If combined_dict is empty, initialize it with the new dictionary
+            for key in simulation_outputs:
+                combined_simulation_outputs[key] = [simulation_outputs[key]]
+        else:
+            # If combined_dict already has keys, append the new dictionary's values
+            for key in simulation_outputs:
+                if key in combined_simulation_outputs:
+                    combined_simulation_outputs[key].append(simulation_outputs[key])
+                else:
+                    combined_simulation_outputs[key] = [simulation_outputs[key]]
+    # cast lists to arrays
+    for key in combined_simulation_outputs:
+        combined_simulation_outputs[key] = np.array(combined_simulation_outputs[key])
+    return combined_simulation_outputs

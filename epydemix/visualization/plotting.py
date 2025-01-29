@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import pandas as pd
-from typing import List, Optional, Union, Any
+from typing import List, Optional, Union, Any, Tuple, Dict
+import matplotlib.dates as mdates
 
 
 def get_timeseries_data(df_quantiles: pd.DataFrame, 
@@ -22,268 +23,402 @@ def get_timeseries_data(df_quantiles: pd.DataFrame,
     return df_quantiles.loc[(df_quantiles["quantile"] == quantile)][["date", column]]
 
 
-def plot_quantiles(results: Any, 
-                   columns: Union[List[str], str], 
-                   ax: Optional[plt.Axes] = None,
-                   lower_q: float = 0.05, 
-                   upper_q: float = 0.95, 
-                   show_median: bool = True, 
-                   ci_alpha: float = 0.3, 
-                   title: str = "", 
-                   show_legend: bool = True, 
-                   palette: str = "Dark2", 
-                   colors: Optional[Union[List[str], str]] = None, 
-                   labels: Optional[Union[List[str], str]] = None) -> None:
+def plot_quantiles(df_quantiles: pd.DataFrame,
+                  columns: Union[List[str], str], 
+                  data: Optional[pd.DataFrame] = None,
+                  ax: Optional[plt.Axes] = None,
+                  lower_q: float = 0.05, 
+                  upper_q: float = 0.95, 
+                  show_median: bool = True,
+                  show_data: bool = False,
+                  ci_alpha: float = 0.3, 
+                  title: str = "", 
+                  ylabel: str = "",  
+                  xlabel: str = "",  
+                  show_legend: bool = True, 
+                  legend_loc: str = "upper left",  
+                  palette: str = "Dark2", 
+                  colors: Optional[Union[List[str], str]] = None,
+                  labels: Optional[Union[List[str], str]] = None,
+                  y_scale: str = "linear",  
+                  grid: bool = True) -> plt.Axes:
     """
-    Plots the quantiles for a specific compartment and demographic group over time.
+    Plots quantiles for compartments over time with optional observed data.
 
     Args:
-        results (Any): An object containing the simulation results with a `get_df_quantiles` method.
-        columns (Union[List[str], str]): The names of the columns to plot data for.
-        ax (Optional[plt.Axes], optional): The axes to plot on. If None, a new figure and axes are created (default is None).
-        lower_q (float, optional): The lower quantile to plot (default is 0.05).
-        upper_q (float, optional): The upper quantile to plot (default is 0.95).
-        show_median (bool, optional): Whether to show the median (default is True).
-        ci_alpha (float, optional): The alpha value for the confidence interval shading (default is 0.3).
-        title (str, optional): The title of the plot (default is an empty string).
-        show_legend (bool, optional): Whether to show the legend (default is True).
-        palette (str, optional): The color palette for the plot (default is "Set2").
-        colors (Optional[Union[List[str], str]], optional): The colors to use for the plot. If None, colors from the palette are used (default is None).
-        labels (Optional[Union[List[str], str]], optional): Labels for the lines. If None, column names are used (default is None).
-    
+        df_quantiles: DataFrame with columns: 'date', 'quantile', and data columns
+        columns: Column name(s) to plot
+        data: Optional DataFrame containing observed data
+        ax: Matplotlib axes to plot on
+        lower_q: Lower quantile value (0.05 = 5th percentile)
+        upper_q: Upper quantile value (0.95 = 95th percentile)
+        show_median: Whether to show median line
+        show_data: Whether to show observed data points
+        ci_alpha: Alpha value for confidence interval shading
+        title: Plot title
+        ylabel: Y-axis label
+        xlabel: X-axis label
+        show_legend: Whether to show legend
+        legend_loc: Legend location
+        palette: Color palette name
+        colors: Custom colors for lines
+        labels: Custom labels for legend
+        y_scale: Scale for y-axis ('linear' or 'log')
+        grid: Whether to show grid lines
+
     Returns:
-        None
+        plt.Axes: The matplotlib axes object
     """
-    
-    df_quantiles = results.get_df_quantiles()
-    
     if not isinstance(columns, list):
         columns = [columns]
 
     if ax is None:
-        fig, ax = plt.subplots(dpi=300, figsize=(10,4))
+        _, ax = plt.subplots(dpi=300, figsize=(10,4))
 
     if colors is None:
         colors = sns.color_palette(palette, len(columns))
-    else: 
-        if not isinstance(colors, list):
-            colors = [colors]
+    elif not isinstance(colors, list):
+        colors = [colors]
 
-    if labels is not None:
-        if not isinstance(labels, list):
-            labels = [labels]
-    else: 
+    if labels is None:
         labels = columns
-
-    t = 0
-    for column in columns:
-        if show_median:
-            df_med = get_timeseries_data(df_quantiles, column, 0.5)
-            ax.plot(df_med.date, df_med[column].values, color=colors[t], label=labels[t])
-
-        df_q1 = get_timeseries_data(df_quantiles, column, lower_q)
-        df_q2 = get_timeseries_data(df_quantiles, column, upper_q)
-        ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values, alpha=ci_alpha, color=colors[t], linewidth=0.)
-        t += 1
-
-    ax.spines["right"].set_visible(False)
-    ax.spines["top"].set_visible(False)
-    ax.grid(axis="y", linestyle="--", linewidth=0.3)
-
-    ax.set_title(title)
-    if show_legend:
-        ax.legend(loc="upper left", frameon=False)
-
-
-def plot_selected_quantiles(df_quantiles: pd.DataFrame,
-                            data: pd.DataFrame, 
-                            ax: Optional[plt.Axes] = None, 
-                            show_data: bool = True, 
-                            columns: Union[str, List[str]] = "data", 
-                            lower_q: float = 0.05, 
-                            upper_q: float = 0.95, 
-                            show_median: bool = True, 
-                            ci_alpha: float = 0.3, 
-                            title: str = "", 
-                            show_legend: bool = True, 
-                            ylabel: str = "", 
-                            colors: Optional[Union[List[str], str]] = None, 
-                            palette: str = "Dark2") -> None:
-    """
-    Plots the selected quantiles from the calibration results.
-
-    Args:
-        calibration_results (Any): An object containing the calibration results, including selected quantiles and observed data.
-        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        show_data (bool, optional): Whether to show the observed data points (default is True).
-        columns (Union[str, List[str]], optional): The columns to plot from the quantiles data (default is "data").
-        lower_q (float, optional): The lower quantile to plot (default is 0.05).
-        upper_q (float, optional): The upper quantile to plot (default is 0.95).
-        show_median (bool, optional): Whether to show the median line (default is True).
-        ci_alpha (float, optional): The alpha value for the confidence interval shading (default is 0.3).
-        title (str, optional): The title of the plot (default is an empty string).
-        show_legend (bool, optional): Whether to show the legend (default is True).
-        ylabel (str, optional): The label for the y-axis (default is an empty string).
-        palette (str, optional): The color palette to use for the plot (default is "Set2").
-
-    Returns:
-        None: This function does not return any values; it produces a plot.
-    """
-    
-    if not isinstance(columns, list):
-        columns = [columns]
-    
-    if ax is None:
-        fig, ax = plt.subplots(dpi=300, figsize=(10,4))
-
-    if colors is None:
-        colors = sns.color_palette(palette, len(columns))
-    else: 
-        if not isinstance(colors, list):
-            colors = [colors]
-    t = 0
+    elif not isinstance(labels, list):
+        labels = [labels]
 
     pleg, handles = [], []
-    for column in columns:
+    for t, (column, color, label) in enumerate(zip(columns, colors, labels)):
         if show_median:
             df_med = get_timeseries_data(df_quantiles, column, 0.5)
-            p1, = ax.plot(df_med.date, df_med[column].values, color=colors[t])
+            p1, = ax.plot(df_med.date, df_med[column].values, 
+                         color=color, label=label, zorder=2)
 
         df_q1 = get_timeseries_data(df_quantiles, column, lower_q)
         df_q2 = get_timeseries_data(df_quantiles, column, upper_q)
-        p2 = ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values, alpha=ci_alpha, color=colors[t], linewidth=0.)
-        pleg.append((p1, p2))
-        handles.append(f"median ({np.round((1 - lower_q * 2) * 100, 0)}% CI)")
-        t += 1
+        p2 = ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values, 
+                            alpha=ci_alpha, color=color, linewidth=0., zorder=1)
+        
+        if show_median:
+            pleg.append((p1, p2))
+            handles.append(f"{label} (median, {np.round((1 - lower_q * 2) * 100, 0)}% CI)")
+        else:
+            pleg.append(p2)
+            handles.append(f"{label} ({np.round((1 - lower_q * 2) * 100, 0)}% CI)")
 
-    if show_data: 
-        p_actual = ax.scatter(df_q1.date, data["data"], s=10, color="k", zorder=1)
+    if show_data and data is not None:
+        p_actual = ax.scatter(df_quantiles.date.unique(), data["data"], 
+                            s=10, color="k", zorder=3, label="observed")
+        if show_legend:
+            pleg.append(p_actual)
+            handles.append("observed")
 
+    # Style improvements
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
-    ax.grid(axis="y", linestyle="--", linewidth=0.3)
-    ax.set_ylabel(ylabel)
+    
+    if grid:
+        ax.grid(axis="y", linestyle="--", linewidth=0.3, alpha=0.5, zorder=0)
+    
+    # Labels and formatting
     ax.set_title(title)
-    if show_legend:
-        ax.legend(pleg + [p_actual], handles + ["actual"], loc="upper left", frameon=False)
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+    ax.set_yscale(y_scale)
+    
+    if show_legend and pleg:
+        ax.legend(pleg, handles, loc=legend_loc, frameon=False)
+    
+    plt.tight_layout()
+    
+    return ax
 
 
-def plot_posterior_distribution(calibration_results: Any, 
-                                parameter: str, 
-                                generation = None,  
-                                ax: Optional[plt.Axes] = None, 
-                                xlabel: Optional[str] = None, 
-                                kind: str = "hist", 
-                                color: str = "dodgerblue", 
-                                prior_range: bool = False, 
-                                ylabel: str = None, 
-                                title: str = None,
-                                **kwargs) -> None:
+def plot_posterior_distribution(posterior: pd.DataFrame,
+                              parameter: str,
+                              ax: Optional[plt.Axes] = None,
+                              xlabel: Optional[str] = None,
+                              ylabel: Optional[str] = None,
+                              kind: str = "hist",
+                              color: str = "dodgerblue",
+                              xlim: Optional[Tuple[float, float]] = None,
+                              prior: Optional[Any] = None,
+                              prior_range: bool = False,
+                              title: Optional[str] = None,
+                              fontsize: int = 10,
+                              grid: bool = True,
+                              show_kde: bool = True,
+                              show_rug: bool = False,
+                              figsize: Tuple[int, int] = (10, 4),
+                              stat: str = "density",
+                              bins: Union[int, str] = "auto",
+                              alpha: float = 0.4,
+                              vertical_lines: Optional[Dict[str, Dict[str, Any]]] = None,
+                              **kwargs) -> plt.Axes:
     """
-    Plots the posterior distribution of a given parameter from the calibration results.
+    Plots the distribution of a parameter.
 
     Args:
-        calibration_results (Any): An object containing the calibration results, including the posterior distribution.
-        parameter (str): The parameter to plot from the posterior distribution.
-        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        xlabel (Optional[str], optional): The label for the x-axis (default is None).
-        kind (str, optional): The type of plot to generate; options are "hist" for histogram, "kde" for kernel density estimate, and "ecdf" for empirical cumulative distribution function (default is "hist").
-        color (str, optional): The color to use for the plot (default is "dodgerblue").
-        ylabel (str, optional): The label for the y-axis (default is an empty string).
-        prior_range (bool, optional): Whether to set the x-axis limits to the range of the prior distribution (default is False).
-        **kwargs: Additional keyword arguments to pass to the seaborn plotting function.
+        posterior: DataFrame containing the parameter values
+        parameter: The parameter to plot
+        ax: Matplotlib axes to plot on. Creates new figure if None
+        xlabel: X-axis label. If None, uses parameter name
+        ylabel: Y-axis label
+        kind: Type of plot ('hist', 'kde', or 'ecdf')
+        color: Color for the plot
+        xlim: Tuple of (min, max) for x-axis limits
+        prior: Prior distribution object with ppf method
+        prior_range: Whether to set x-axis limits to prior range
+        title: Plot title. If None, auto-generates
+        fontsize: Base font size for labels and ticks
+        grid: Whether to show grid lines
+        show_kde: Whether to show KDE curve with histogram (only for kind='hist')
+        show_rug: Whether to show rug plot
+        figsize: Figure size if creating new figure
+        stat: Statistic to plot ('count', 'density', 'probability')
+        bins: Number of bins or method for histogram
+        alpha: Transparency of the plot
+        vertical_lines: Dict of vertical lines to add, format:
+            {
+                'name': {
+                    'x': value,
+                    'color': 'color',
+                    'linestyle': '--',
+                    'label': 'label'
+                }
+            }
+        **kwargs: Additional arguments passed to plotting functions
 
     Returns:
-        None: This function does not return any values; it produces a plot.
+        plt.Axes: The matplotlib axes object
+
+    Raises:
+        ValueError: If kind is not 'hist', 'kde', or 'ecdf'
+        ValueError: If prior_range is True but no prior is provided
     """
-        
     if ax is None:
-        fig, ax = plt.subplots(dpi=300, figsize=(10,4))
+        _, ax = plt.subplots(dpi=300, figsize=figsize)
 
-    df_posterior = calibration_results.get_posterior_distribution(generation=generation)
+    # Set default labels
+    xlabel = xlabel or parameter
+    
     if kind == "hist":
-        sns.histplot(data=df_posterior, x=parameter, ax=ax, color=color, **kwargs)
-    elif kind == "kde": 
-        sns.kdeplot(data=df_posterior, x=parameter, ax=ax, fill=True, color=color, **kwargs)
-    elif kind == "ecdf": 
-        sns.ecdfplot(data=df_posterior, x=parameter, ax=ax, color=color, **kwargs)
-    else: 
-        raise ValueError("Unknown kind for plot: %s" % kind)
+        sns.histplot(data=posterior,
+                    x=parameter,
+                    ax=ax,
+                    color=color,
+                    stat=stat,
+                    bins=bins,
+                    alpha=alpha,
+                    kde=show_kde,
+                    **kwargs)
+    elif kind == "kde":
+        sns.kdeplot(data=posterior,
+                   x=parameter,
+                   ax=ax,
+                   color=color,
+                   fill=True,
+                   alpha=alpha,
+                   **kwargs)
+    elif kind == "ecdf":
+        sns.ecdfplot(data=posterior,
+                    x=parameter,
+                    ax=ax,
+                    color=color,
+                    **kwargs)
+    else:
+        raise ValueError(f"Unknown kind for plot: {kind}. Must be 'hist', 'kde', or 'ecdf'")
 
-    if ylabel is not None:
-        ax.set_ylabel(ylabel)
-    if xlabel is not None:
-        ax.set_xlabel(xlabel)
-    if title is not None:
-        ax.set_title(title)
+    # Add rug plot if requested
+    if show_rug:
+        sns.rugplot(data=posterior,
+                   x=parameter,
+                   ax=ax,
+                   color=color,
+                   alpha=alpha/2)
 
+    # Add vertical lines if specified
+    if vertical_lines:
+        for line_specs in vertical_lines.values():
+            ax.axvline(x=line_specs['x'],
+                      color=line_specs.get('color', 'red'),
+                      linestyle=line_specs.get('linestyle', '--'),
+                      label=line_specs.get('label', None),
+                      alpha=line_specs.get('alpha', 1.0))
+            if line_specs.get('label'):
+                ax.legend(frameon=False)
+
+    # Style improvements
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
-    ax.grid(axis="y", linestyle="--", linewidth=0.3)
+    
+    if grid:
+        ax.grid(axis="y", linestyle="--", linewidth=0.3, alpha=0.5)
 
-    if prior_range: 
-        xmin, xmax = calibration_results.get_priors()[parameter].ppf(0), calibration_results.get_priors()[parameter].ppf(1)
-        ax.set_xlim(xmin, xmax)
+    # Set axis limits based on prior range or explicit limits
+    if prior_range:
+        if prior is None:
+            raise ValueError("prior must be provided when prior_range is True")
+        ax.set_xlim(prior.ppf(0), prior.ppf(1))
+    elif xlim is not None:
+        ax.set_xlim(xlim)
+
+    # Labels and title
+    ax.set_xlabel(xlabel, fontsize=fontsize)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel, fontsize=fontsize)
+    if title is not None:
+        ax.set_title(title, fontsize=fontsize + 2, pad=20)
+
+    # Tick formatting
+    ax.tick_params(axis='both', which='major', labelsize=fontsize-2)
+
+    # Adjust layout
+    plt.tight_layout()
+
+    return ax
 
 
-def plot_posterior_distribution_2d(calibration_results: Any, 
-                      parameter_x: str, 
-                      parameter_y: str, 
-                      generation = None,
-                      ax: Optional[plt.Axes] = None, 
-                      xlabel: Optional[str] = None, 
-                      ylabel: Optional[str] = None, 
-                      kind: str = "hist", 
-                      palette: str = "Blues", 
-                      prior_range: bool = False, 
-                      title: str = None,  
-                      **kwargs) -> None:
+def plot_posterior_distribution_2d(posterior: pd.DataFrame,
+                                 parameter_x: str, 
+                                 parameter_y: str, 
+                                 ax: Optional[plt.Axes] = None, 
+                                 xlabel: Optional[str] = None, 
+                                 ylabel: Optional[str] = None, 
+                                 kind: str = "hist", 
+                                 palette: str = "Blues", 
+                                 xlim: Optional[Tuple[float, float]] = None,
+                                 ylim: Optional[Tuple[float, float]] = None,
+                                 prior_x: Optional[Any] = None,
+                                 prior_y: Optional[Any] = None,
+                                 prior_range: bool = False,
+                                 title: Optional[str] = None,
+                                 fontsize: int = 10,
+                                 cmap: Optional[str] = None,
+                                 grid: bool = True,
+                                 levels: int = 10,
+                                 figsize: Tuple[int, int] = (6, 6),
+                                 scatter: bool = False,
+                                 scatter_alpha: float = 0.5,
+                                 scatter_size: int = 20,
+                                 scatter_color: str = "k",
+                                 **kwargs) -> plt.Axes:
     """
-    Plots the 2D posterior distribution of two given parameters from the calibration results.
+    Plots the 2D joint distribution of two parameters.
 
     Args:
-        calibration_results (Any): An object containing the calibration results, including the posterior distribution.
-        parameter_x (str): The parameter to plot on the x-axis from the posterior distribution.
-        parameter_y (str): The parameter to plot on the y-axis from the posterior distribution.
-        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        xlabel (Optional[str], optional): The label for the x-axis (default is None).
-        ylabel (Optional[str], optional): The label for the y-axis (default is None).
-        kind (str, optional): The type of plot to generate; options are "hist" for histogram and "kde" for kernel density estimate (default is "hist").
-        palette (str, optional): The color palette to use for the plot (default is "Blues").
-        prior_range (bool, optional): Whether to set the axis limits to the ranges of the prior distributions (default is False).
-        **kwargs: Additional keyword arguments to pass to the seaborn plotting function.
+        posterior: DataFrame containing the parameter values
+        parameter_x: Parameter to plot on x-axis
+        parameter_y: Parameter to plot on y-axis
+        ax: Matplotlib axes to plot on. Creates new figure if None
+        xlabel: X-axis label. If None, uses parameter_x
+        ylabel: Y-axis label. If None, uses parameter_y
+        kind: Plot type ('hist', 'kde', or 'scatter')
+        palette: Color palette for histogram/kde
+        xlim: Tuple of (min, max) for x-axis limits
+        ylim: Tuple of (min, max) for y-axis limits
+        prior_x: Prior distribution object for x parameter
+        prior_y: Prior distribution object for y parameter
+        prior_range: Whether to set axis limits to prior ranges
+        title: Plot title. If None, auto-generates
+        fontsize: Base font size for labels and ticks
+        cmap: Colormap for 2D histogram/kde
+        grid: Whether to show grid lines
+        levels: Number of contour levels for kde
+        figsize: Figure size if creating new figure
+        scatter: Whether to overlay scatter plot on kde
+        scatter_alpha: Alpha value for scatter points
+        scatter_size: Size of scatter points
+        scatter_color: Color for scatter points
+        **kwargs: Additional arguments passed to sns.histplot/kdeplot
 
     Returns:
-        None: This function does not return any values; it produces a plot.
+        plt.Axes: The matplotlib axes object
+
+    Raises:
+        ValueError: If kind is not 'hist', 'kde', or 'scatter'
+        ValueError: If prior_range is True but priors are not provided
     """
-        
     if ax is None:
-        fig, ax = plt.subplots(dpi=300, figsize=(6,4))
+        _, ax = plt.subplots(figsize=figsize, dpi=300)
+    
+    # Set default labels if not provided
+    xlabel = xlabel or parameter_x
+    ylabel = ylabel or parameter_y
+    
+    # Set default colormap
+    if cmap is None:
+        cmap = palette if kind == "hist" else sns.color_palette(palette, as_cmap=True)
 
-    df_posterior = calibration_results.get_posterior_distribution(generation=generation)
+    # Plot based on kind
     if kind == "hist":
-        sns.histplot(data=df_posterior, x=parameter_x, y=parameter_y, ax=ax, palette=palette, **kwargs)
-    elif kind == "kde": 
-        sns.kdeplot(data=df_posterior, x=parameter_x, y=parameter_y, ax=ax, fill=True, palette=palette, **kwargs)
-    else: 
-        raise ValueError("Unknown kind for plot: %s" % kind)
+        sns.histplot(data=posterior, 
+                          x=parameter_x, 
+                          y=parameter_y, 
+                          ax=ax,
+                          cmap=cmap,
+                          **kwargs)
+            
+    elif kind == "kde":
+        sns.kdeplot(data=posterior,
+                    x=parameter_x,
+                    y=parameter_y,
+                    ax=ax,
+                    cmap=cmap,
+                    levels=levels,
+                    fill=True,
+                    **kwargs)
+            
+    elif kind == "scatter":
+        ax.scatter(posterior[parameter_x],
+                  posterior[parameter_y],
+                  alpha=scatter_alpha,
+                  s=scatter_size,
+                  c=scatter_color,
+                  **kwargs)
+    else:
+        raise ValueError(f"Unknown plot kind: {kind}. Must be 'hist', 'kde', or 'scatter'")
 
-    if xlabel is not None:
-        ax.set_xlabel(xlabel)
-    if ylabel is not None:
-        ax.set_ylabel(ylabel)
-    if title is not None:
-        ax.set_title(title)
+    # Add scatter points if requested (for hist/kde)
+    if scatter and kind != "scatter":
+        ax.scatter(posterior[parameter_x],
+                  posterior[parameter_y],
+                  alpha=scatter_alpha,
+                  s=scatter_size,
+                  c=scatter_color,
+                  zorder=2)
 
+    # Style improvements
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
+    
+    if grid:
+        ax.grid(linestyle="--", linewidth=0.3, alpha=0.5)
 
-    if prior_range: 
-        xmin, xmax = calibration_results.get_priors()[parameter_x].ppf(0), calibration_results.get_priors()[parameter_x].ppf(1)
-        ymin, ymax = calibration_results.get_priors()[parameter_y].ppf(0), calibration_results.get_priors()[parameter_y].ppf(1)
+    # Set axis limits based on prior ranges or explicit limits
+    if prior_range:
+        if prior_x is None or prior_y is None:
+            raise ValueError("Both prior_x and prior_y must be provided when prior_range is True")
+        ax.set_xlim(prior_x.ppf(0), prior_x.ppf(1))
+        ax.set_ylim(prior_y.ppf(0), prior_y.ppf(1))
+    else:
+        if xlim is not None:
+            ax.set_xlim(xlim)
+        if ylim is not None:
+            ax.set_ylim(ylim)
 
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(ymin, ymax)
+    # Labels and title
+    ax.set_xlabel(xlabel, fontsize=fontsize)
+    ax.set_ylabel(ylabel, fontsize=fontsize)
+    if title is None:
+        title = f"Joint Distribution\n{parameter_x} vs {parameter_y}"
+    ax.set_title(title, fontsize=fontsize + 2, pad=20)
+
+    # Tick formatting
+    ax.tick_params(axis='both', which='major', labelsize=fontsize-2)
+
+    # Adjust layout
+    plt.tight_layout()
+
+    return ax
 
 
 def plot_selected_trajectories(calibration_results, ax=None, show_data=True, columns="data", 
@@ -296,223 +431,479 @@ def plot_selected_trajectories(calibration_results, ax=None, show_data=True, col
     return 0
 
 
-def plot_contact_matrix(population: Any, 
-                        layer_name: str, 
-                        ax: Optional[plt.Axes] = None, 
-                        title: Optional[str] = None, 
-                        show_colorbar: bool = True, 
-                        cmap: str = "rocket_r", 
-                        vmin: Optional[float] = None, 
-                        vmax: Optional[float] = None, 
-                        labelsize: int = 10) -> None:
+def plot_contact_matrix(population: Any,
+                       layer: str = "all",
+                       ax: Optional[plt.Axes] = None,
+                       cmap: str = "YlOrRd",
+                       show_values: bool = False,
+                       title: Optional[str] = None,
+                       colorbar: bool = True,
+                       fmt: str = ".1f",
+                       fontsize: int = 8,
+                       rotation: int = 45,
+                       figsize: Tuple[int, int] = (10, 8),
+                       vmin: Optional[float] = None,
+                       vmax: Optional[float] = None,
+                       origin: str = "lower",
+                       symmetric: bool = False) -> plt.Axes:
     """
-    Plots the contact matrix for a given population layer.
-
-    Args:
-        population (Any): An object containing population data, including contact matrices.
-        layer_name (str): The name of the contact matrix layer to plot.
-        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        title (Optional[str], optional): The title of the plot (default is None, which uses the layer name as the title).
-        show_colorbar (bool, optional): Whether to display the colorbar (default is True).
-        cmap (str, optional): The colormap to use for the plot (default is "rocket_r").
-        vmin (Optional[float], optional): The minimum value for the color scale (default is None, which uses the minimum value in the contact matrix).
-        vmax (Optional[float], optional): The maximum value for the color scale (default is None, which uses the maximum value in the contact matrix).
-        labelsize (int, optional): The font size for axis tick labels (default is 10).
-
-    Returns:
-        None: This function does not return any values; it produces a plot.
-    """
-
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(6,6), dpi=300)
-
-    if vmin is None: 
-        vmin = np.min(population.contact_matrices[layer_name])
-    if vmax is None: 
-        vmax = np.max(population.contact_matrices[layer_name])
-
-    im = ax.imshow(population.contact_matrices[layer_name], origin="lower", cmap=sns.color_palette(cmap, as_cmap=True), vmin=vmin, vmax=vmax)
+    Plot a contact matrix heatmap.
     
-    ax.set_xticks(range(population.Nk_names.shape[0]))
-    ax.set_yticks(range(population.Nk_names.shape[0]))
-    ax.set_xticklabels(population.Nk_names, rotation=90, fontsize=labelsize)
-    ax.set_yticklabels(population.Nk_names, fontsize=labelsize)
-
-    if show_colorbar:
-        plt.colorbar(im, ax=ax, shrink=0.8)
-
-    if title is None: 
-        ax.set_title(layer_name)
-    else:
-        ax.set_title(title)
+    Args:
+        population: Population object containing contact matrices
+        layer: Name of the contact layer to plot
+        ax: Matplotlib axes to plot on. Creates new figure if None
+        cmap: Colormap for the heatmap
+        show_values: Whether to show numerical values in cells
+        title: Plot title. If None, uses layer name
+        colorbar: Whether to show the colorbar
+        fmt: Format string for cell values
+        fontsize: Font size for labels and values
+        rotation: Rotation angle for x-axis labels
+        figsize: Figure size if creating new figure
+        vmin: Minimum value for colormap scaling
+        vmax: Maximum value for colormap scaling
+        origin: Whether to plot the matrix with the origin at the bottom left (default) or top left
+        symmetric: If True, centers colormap around 0 with symmetric limits
+        
+    Returns:
+        plt.Axes: The matplotlib axes object
+        
+    Raises:
+        KeyError: If specified layer doesn't exist
+    """
+    if layer not in population.contact_matrices:
+        raise KeyError(f"Layer '{layer}' not found. Available layers: {population.layers}")
+    
+    # Get contact matrix
+    matrix = population.contact_matrices[layer]
+    
+    # Create figure if needed
+    if ax is None:
+        _, ax = plt.subplots(figsize=figsize)
+    
+    # Handle colormap scaling
+    if symmetric:
+        abs_max = max(abs(matrix.min()), abs(matrix.max()))
+        vmin = -abs_max if vmin is None else vmin
+        vmax = abs_max if vmax is None else vmax
+        cmap = plt.get_cmap(cmap).copy()
+        cmap.set_bad('gray')
+    
+    # Create heatmap
+    im = ax.imshow(matrix, 
+                   cmap=cmap, 
+                   aspect='equal',
+                   vmin=vmin,
+                   vmax=vmax, 
+                   origin=origin)
+    
+    # Show colorbar
+    if colorbar:
+        cbar = plt.colorbar(im, ax=ax)
+        cbar.set_label('Contacts per day', fontsize=fontsize)
+        cbar.ax.tick_params(labelsize=fontsize)
+    
+    # Show values in cells
+    if show_values:
+        for i in range(matrix.shape[0]):
+            for j in range(matrix.shape[1]):
+                value = matrix[i, j]
+                text = format(value, fmt)
+                # Determine text color based on background
+                if symmetric:
+                    text_color = 'white' if abs(value) > abs_max/2 else 'black'
+                else:
+                    text_color = 'white' if value > (vmax or matrix.max())/2 else 'black'
+                ax.text(j, i, text,
+                       ha="center", va="center",
+                       color=text_color,
+                       fontsize=fontsize)
+    
+    # Set labels and ticks
+    ax.set_xticks(np.arange(len(population.Nk_names)))
+    ax.set_yticks(np.arange(len(population.Nk_names)))
+    ax.set_xticklabels(population.Nk_names, rotation=rotation, ha='right')
+    ax.set_yticklabels(population.Nk_names)
+    
+    # Adjust tick label sizes
+    ax.tick_params(axis='both', which='major', labelsize=fontsize)
+    
+    # Set title
+    if title is None:
+        title = f"Contact Matrix - {layer}"
+    ax.set_title(title, fontsize=fontsize + 2, pad=20)
+    
+    # Add labels
+    ax.set_xlabel("Age group (contacted)", fontsize=fontsize)
+    ax.set_ylabel("Age group (contacting)", fontsize=fontsize)
+    
+    # Add grid to better separate cells
+    ax.set_xticks(np.arange(-.5, len(population.Nk_names), 1), minor=True)
+    ax.set_yticks(np.arange(-.5, len(population.Nk_names), 1), minor=True)
+    ax.grid(which='minor', color='w', linestyle='-', linewidth=0.5)
+    
+    # Adjust layout
+    plt.tight_layout()
+    
+    return ax
 
 
 def plot_population(population: Any, 
-                    ax: Optional[plt.Axes] = None, 
-                    title: str = "", 
-                    color: str = "dodgerblue", 
-                    show_perc: bool = False) -> None:
+                   ax: Optional[plt.Axes] = None,
+                   title: Optional[str] = None,
+                   color: str = "dodgerblue",
+                   show_perc: bool = False,
+                   fontsize: int = 10,
+                   rotation: int = 45,
+                   figsize: Tuple[int, int] = (10, 6),
+                   bar_width: float = 0.8,
+                   grid: bool = True,
+                   ylabel: Optional[str] = None,
+                   xlabel: str = "Age group",
+                   show_values: bool = True,
+                   fmt: str = ".1f",
+                   value_fontsize: Optional[int] = None) -> plt.Axes:
     """
-    Plots the population distribution across demographic groups.
+    Plot the population distribution across demographic groups.
 
     Args:
-        population (Any): An object containing population data, including demographic group names and sizes (`Nk_names` and `Nk`).
-        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        title (str, optional): The title of the plot (default is an empty string).
-        color (str, optional): The color to use for the bars in the plot (default is "dodgerblue").
-        show_perc (bool, optional): Whether to show the population as a percentage of the total (default is False).
+        population: Population object containing demographic data
+        ax: Matplotlib axes to plot on. Creates new figure if None
+        title: Plot title. If None, uses default title
+        color: Color for the bars
+        show_perc: Whether to show population as percentages
+        fontsize: Base font size for labels and ticks
+        rotation: Rotation angle for x-axis labels
+        figsize: Figure size if creating new figure
+        bar_width: Width of the bars (between 0 and 1)
+        grid: Whether to show grid lines
+        ylabel: Y-axis label. If None, uses default based on show_perc
+        xlabel: X-axis label
+        show_values: Whether to show values above bars
+        fmt: Format string for values
+        value_fontsize: Font size for bar values. If None, uses fontsize
 
     Returns:
-        None: This function does not return any values; it produces a plot.
+        plt.Axes: The matplotlib axes object
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10,6), dpi=300)
-    if show_perc: 
-        ax.bar(population.Nk_names, 100 * population.Nk / np.sum(population.Nk), color=color)
-        ax.set_ylabel("% of individuals")
-    else: 
-        ax.bar(population.Nk_names, population.Nk, color=color)
-        ax.set_ylabel("Number of individuals")
+        _, ax = plt.subplots(figsize=figsize, dpi=300)
 
-    ax.tick_params(axis="x", rotation=90)
+    # Calculate values
+    values = population.Nk
+    if show_perc:
+        values = 100 * values / np.sum(values)
+
+    # Create bars
+    bars = ax.bar(population.Nk_names, values, 
+                 color=color, width=bar_width)
+
+    # Show values on bars
+    if show_values:
+        value_fontsize = value_fontsize or fontsize
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2, height,
+                   format(height, fmt),
+                   ha='center', va='bottom',
+                   fontsize=value_fontsize)
+
+    # Style improvements
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
-    ax.grid(axis="y", linestyle="--", linewidth=0.3)
-    ax.set_title(title)
+    
+    if grid:
+        ax.grid(axis="y", linestyle="--", linewidth=0.3, alpha=0.5)
+    
+    # Labels
+    if ylabel is None:
+        ylabel = "Population (%)" if show_perc else "Population"
+    ax.set_ylabel(ylabel, fontsize=fontsize)
+    ax.set_xlabel(xlabel, fontsize=fontsize)
+    
+    # Title
+    if title is None:
+        title = f"Population Distribution - {population.name}"
+    ax.set_title(title, fontsize=fontsize + 2, pad=20)
+    
+    # Tick formatting
+    ax.tick_params(axis='both', which='major', labelsize=fontsize)
+    plt.setp(ax.get_xticklabels(), rotation=rotation, ha='right')
+    
+    # Adjust y-axis to start at 0
+    ax.set_ylim(bottom=0)
+    
+    # Add some padding above highest bar for values
+    if show_values:
+        ax.set_ylim(top=ax.get_ylim()[1] * 1.1)
+    
+    # Adjust layout
+    plt.tight_layout()
+    
+    return ax
 
 
 def plot_spectral_radius(epimodel: Any, 
-                         ax: Optional[plt.Axes] = None, 
-                         title: str = "", 
-                         color: str = "dodgerblue", 
-                         normalize: bool = False, 
-                         show_perc: bool = True, 
-                         layer: str = "overall", 
-                         show_interventions: bool = True, 
-                         interventions_palette: str = "Dark2", 
-                         interventions_colors: Optional[List[str]] = None) -> None:
+                        ax: Optional[plt.Axes] = None, 
+                        title: Optional[str] = None, 
+                        color: str = "k", 
+                        normalize: bool = False, 
+                        show_perc: bool = True, 
+                        layer: str = "overall", 
+                        show_interventions: bool = True, 
+                        interventions_palette: str = "Dark2", 
+                        interventions_colors: Optional[List[str]] = None,
+                        fontsize: int = 10,
+                        date_format: str = '%Y-%m-%d',
+                        ylabel: Optional[str] = None,
+                        xlabel: str = "Date",
+                        grid: bool = True,
+                        alpha: float = 0.2,
+                        legend_loc: str = "upper left") -> plt.Axes:
     """
     Plots the spectral radius of the contact matrices over time.
 
     Args:
-        epimodel (Any): The EpiModel object containing the contact matrices and interventions.
-        ax (Optional[plt.Axes], optional): The matplotlib Axes object to plot on. If not provided, a new figure and axes will be created.
-        title (str, optional): The title of the plot (default is an empty string).
-        color (str, optional): The color of the plot line (default is "dodgerblue").
-        normalize (bool, optional): Whether to normalize the spectral radius by the initial value (default is False).
-        show_perc (bool, optional): Whether to show the percentage change in the spectral radius (default is True).
-        layer (str, optional): The layer of the contact matrix to plot (default is "overall").
-        show_interventions (bool, optional): Whether to show the interventions on the plot (default is True).
-        interventions_palette (str, optional): The seaborn color palette to use for the interventions (default is "Set2").
-        interventions_colors (Optional[List[str]], optional): A list of colors to use for the interventions. If not provided, the palette will be used (default is None).
+        epimodel: The EpiModel object containing contact matrices and interventions
+        ax: Matplotlib axes to plot on. Creates new figure if None
+        title: Plot title. If None, uses default title
+        color: Color of the spectral radius line
+        normalize: Whether to normalize by initial value
+        show_perc: Whether to show as percentage change
+        layer: Contact matrix layer to analyze
+        show_interventions: Whether to show intervention periods
+        interventions_palette: Color palette for interventions
+        interventions_colors: Custom colors for interventions
+        fontsize: Base font size for labels and ticks
+        date_format: Format string for date labels
+        ylabel: Y-axis label. If None, auto-generated based on normalize/show_perc
+        xlabel: X-axis label
+        grid: Whether to show grid lines
+        alpha: Transparency for intervention highlights
+        legend_loc: Location of the legend
 
     Returns:
-        None: This function does not return any values; it produces a plot.
+        plt.Axes: The matplotlib axes object
+
+    Raises:
+        ValueError: If no contact matrices are defined or layer doesn't exist
     """
-
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10,6), dpi=300)
-
-    # compute spectral radius
     if len(epimodel.Cs) == 0:
-        print("Contacts over time have not been defined")
-        return None
+        raise ValueError("No contact matrices defined over time")
+    
+    if layer not in epimodel.population.layers + ["overall"]:
+        raise ValueError(f"Layer '{layer}' not found. Available layers: {epimodel.population.layers + ['overall']}")
 
+    # Create figure if needed
+    if ax is None:
+        _, ax = plt.subplots(figsize=(10, 6), dpi=300)
+
+    # Compute spectral radius
     dates = list(epimodel.Cs.keys())
-    rho = [compute_spectral_radius(epimodel.Cs[date][layer]) for date in dates]
+    rho = [np.linalg.eigvals(epimodel.Cs[date][layer]).max().real for date in dates]
+    
+    # Normalize if requested
     if normalize:
         rho = np.array(rho) / rho[0]
-        ylabel = f"$\\rho(C(t)) / \\rho(C(t_0))$ ({layer})"
+        if show_perc:
+            rho = (rho - 1) * 100
 
-    elif show_perc:
-        rho = (np.array(rho) / rho[0] - 1) * 100
-        ylabel = f"$\\rho(C(t))$ % change ({layer})"
+    # Plot spectral radius
+    ax.plot(dates, rho, color=color, label='Spectral radius', linewidth=2)
+
+    # Show interventions if requested
+    if show_interventions and hasattr(epimodel, 'interventions'):
+        # Select interventions for the layer (if layer is "overall", all interventions are selected)
+        if layer == "overall":
+            interventions = epimodel.interventions
+        else:
+            interventions = [intervention for intervention in epimodel.interventions if intervention["layer"] == layer]
+
+        # get colors    
+        colors = (interventions_colors if interventions_colors 
+                 else sns.color_palette(interventions_palette, len(interventions)))
         
-    else: 
-       ylabel = "$\\rho(C(t))$ ({layer})"
+        for intervention, color in zip(interventions, colors):
+            ax.axvspan(intervention["start_date"], intervention["end_date"], alpha=alpha, color=color, label=intervention["name"])
 
-    ax.plot(dates, rho, color=color)
+    # Style improvements
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
-    ax.grid(axis="y", linestyle="--", linewidth=0.3)
-    ax.set_title(title)
-    ax.set_ylabel(ylabel)
-
-    if show_interventions:
-        if interventions_colors is None:
-            interventions_colors = sns.color_palette(interventions_palette, len(epimodel.interventions))
-        else: 
-            if not isinstance(interventions_colors, list):
-                interventions_colors = [interventions_colors]
-
-        y1, y2 = ax.get_ylim()
-        x1, x2 = ax.get_xlim()
-        for color, interventions in zip(interventions_colors, epimodel.interventions): 
-            ax.fill_betweenx([y1, y2], interventions["start_date"], interventions["end_date"], color=color, alpha=0.3, linewidth=0, label=interventions["name"])
-
-        ax.set_xlim(x1, x2)
-        ax.set_ylim(y1, y2)
-
-        ax.legend(loc="upper right")
-  
     
-def compute_spectral_radius(m: np.ndarray) -> float:
+    if grid:
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+
+    # Format dates
+    ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+
+    # Labels
+    if ylabel is None:
+        if normalize:
+            ylabel = "Change in spectral radius (%)" if show_perc else "Normalized spectral radius"
+        else:
+            ylabel = "Spectral radius"
+    ax.set_ylabel(ylabel, fontsize=fontsize)
+    ax.set_xlabel(xlabel, fontsize=fontsize)
+
+    if title is None:
+        title = f"Contact Pattern Intensity - {layer.title()} Layer"
+    ax.set_title(title, fontsize=fontsize + 2, pad=20)
+
+    # Legend if interventions are shown
+    if show_interventions and hasattr(epimodel, 'interventions'):
+        ax.legend(bbox_to_anchor=(1.05, 1), loc=legend_loc, fontsize=fontsize-2)
+
+    # Adjust layout
+    plt.tight_layout()
+
+    return ax
+
+
+def plot_distance_distribution(distances: Union[np.ndarray, List[float], pd.Series],
+                             ax: Optional[plt.Axes] = None,
+                             kind: str = "hist",
+                             color: str = "dodgerblue",
+                             xlabel: Optional[str] = None,
+                             ylabel: Optional[str] = None,
+                             title: Optional[str] = None,
+                             fontsize: int = 10,
+                             grid: bool = True,
+                             show_kde: bool = True,
+                             show_rug: bool = False,
+                             figsize: Tuple[int, int] = (10, 4),
+                             xlim: Optional[Tuple[float, float]] = None,
+                             ylim: Optional[Tuple[float, float]] = None,
+                             stat: str = "density",
+                             bins: Union[int, str] = "auto",
+                             alpha: float = 0.4,
+                             vertical_lines: Optional[Dict[str, Dict[str, Any]]] = None,
+                             **kwargs) -> plt.Axes:
     """
-    Computes the spectral radius of a matrix, which is the largest absolute value of its eigenvalues.
+    Plots the distribution of distances/errors from calibration.
 
     Args:
-        m (np.ndarray): The matrix to compute the spectral radius for.
+        distances: Array-like object containing the distance/error values
+        ax: Matplotlib axes to plot on. Creates new figure if None
+        kind: Type of plot ('hist', 'kde', or 'ecdf')
+        color: Color for the plot
+        xlabel: X-axis label
+        ylabel: Y-axis label
+        title: Plot title
+        fontsize: Base font size for labels and ticks
+        grid: Whether to show grid lines
+        show_kde: Whether to show KDE curve with histogram (only for kind='hist')
+        show_rug: Whether to show rug plot
+        figsize: Figure size if creating new figure
+        xlim: Tuple of (min, max) for x-axis limits
+        ylim: Tuple of (min, max) for y-axis limits
+        stat: Statistic to plot for histogram ('count', 'density', 'probability')
+        bins: Number of bins or method for histogram
+        alpha: Transparency of the plot
+        vertical_lines: Dict of vertical lines to add, format:
+            {
+                'name': {
+                    'x': value,
+                    'color': 'color',
+                    'linestyle': '--',
+                    'label': 'label'
+                }
+            }
+        **kwargs: Additional arguments passed to plotting functions
 
     Returns:
-        float: The spectral radius of the matrix.
-    """
-    return np.max(np.abs(np.linalg.eigvals(m)))
-    
+        plt.Axes: The matplotlib axes object
 
-def plot_distance_distribution(calibration_results: Any, 
-                               generation = None,
-                               ax: Optional[plt.Axes] = None, 
-                               xlabel: Optional[str] = None, 
-                               kind: str = "hist", 
-                               color: str = "dodgerblue", 
-                               ylabel: str = "", 
-                               **kwargs) -> None:
+    Raises:
+        ValueError: If kind is not 'hist', 'kde', or 'ecdf'
     """
-    Plots the error distribution from the calibration results.
-
-    Args:
-        calibration_results (Any): An object containing the calibration results, including the error distribution.
-        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        xlabel (Optional[str], optional): The label for the x-axis (default is None).
-        kind (str, optional): The type of plot to generate; options are "hist" for histogram, "kde" for kernel density estimate, and "ecdf" for empirical cumulative distribution function (default is "hist").
-        color (str, optional): The color to use for the plot (default is "dodgerblue").
-        ylabel (str, optional): The label for the y-axis (default is an empty string).
-        **kwargs: Additional keyword arguments to pass to the seaborn plotting function.
-
-    Returns:
-        None: This function does not return any values; it produces a plot.
-    """
-        
     if ax is None:
-        fig, ax = plt.subplots(dpi=300, figsize=(10,4))
+        _, ax = plt.subplots(dpi=300, figsize=figsize)
 
-    errors = calibration_results.get_distances(generation=generation)
+    # Convert input to pandas Series for consistent handling
+    if not isinstance(distances, pd.Series):
+        distances = pd.Series(distances)
+
+    # Set default labels if not provided
+    if xlabel is None:
+        xlabel = "Distance"
+    if ylabel is None:
+        ylabel = {
+            "hist": "Density" if stat == "density" else "Count",
+            "kde": "Density",
+            "ecdf": "Cumulative Probability"
+        }.get(kind, "")
+
+    # Plot based on kind
     if kind == "hist":
-        sns.histplot(data=errors, ax=ax, color=color, **kwargs)
-    elif kind == "kde": 
-        sns.kdeplot(data=errors, ax=ax, fill=True, color=color, **kwargs)
-    elif kind == "ecdf": 
-        sns.ecdfplot(data=errors, ax=ax, color=color, **kwargs)
-    else: 
-        raise ValueError("Unknown kind for plot: %s" % kind)
+        sns.histplot(data=distances,
+                    ax=ax,
+                    color=color,
+                    stat=stat,
+                    bins=bins,
+                    alpha=alpha,
+                    kde=show_kde,
+                    **kwargs)
+    elif kind == "kde":
+        sns.kdeplot(data=distances,
+                   ax=ax,
+                   color=color,
+                   fill=True,
+                   alpha=alpha,
+                   **kwargs)
+    elif kind == "ecdf":
+        sns.ecdfplot(data=distances,
+                    ax=ax,
+                    color=color,
+                    **kwargs)
+    else:
+        raise ValueError(f"Unknown kind for plot: {kind}. Must be 'hist', 'kde', or 'ecdf'")
 
-    if xlabel is not None:
-        ax.set_xlabel(xlabel)
+    # Add rug plot if requested
+    if show_rug:
+        sns.rugplot(data=distances,
+                   ax=ax,
+                   color=color,
+                   alpha=alpha/2)
 
-    ax.set_ylabel(ylabel)
+    # Add vertical lines if specified
+    if vertical_lines:
+        for line_specs in vertical_lines.values():
+            ax.axvline(x=line_specs['x'],
+                      color=line_specs.get('color', 'red'),
+                      linestyle=line_specs.get('linestyle', '--'),
+                      label=line_specs.get('label', None),
+                      alpha=line_specs.get('alpha', 1.0))
+            if line_specs.get('label'):
+                ax.legend(frameon=False)
+
+    # Style improvements
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
-    ax.grid(axis="y", linestyle="--", linewidth=0.3)
+    
+    if grid:
+        ax.grid(axis="y", linestyle="--", linewidth=0.3, alpha=0.5)
+
+    # Set axis limits if provided
+    if xlim is not None:
+        ax.set_xlim(xlim)
+    if ylim is not None:
+        ax.set_ylim(ylim)
+
+    # Labels and title
+    ax.set_xlabel(xlabel, fontsize=fontsize)
+    ax.set_ylabel(ylabel, fontsize=fontsize)
+    if title is not None:
+        ax.set_title(title, fontsize=fontsize + 2, pad=20)
+
+    # Tick formatting
+    ax.tick_params(axis='both', which='major', labelsize=fontsize-2)
+
+    # Adjust layout
+    plt.tight_layout()
+
+    return ax
 
 
 def plot_projections(projections: Any, 
@@ -586,4 +977,111 @@ def plot_projections(projections: Any,
     ax.set_title(title)
     if show_legend:
         ax.legend(pleg + [p_actual], handles + ["actual"], loc="upper left", frameon=False)
+
+
+def plot_trajectories(stacked: Dict[str, np.ndarray],
+                     columns: Union[List[str], str],
+                     data: Optional[pd.DataFrame] = None,
+                     ax: Optional[plt.Axes] = None,
+                     show_data: bool = False,
+                     alpha: float = 0.1,
+                     title: str = "",
+                     ylabel: str = "",
+                     xlabel: str = "",
+                     show_legend: bool = True,
+                     legend_loc: str = "upper left",
+                     palette: str = "Dark2",
+                     colors: Optional[Union[List[str], str]] = None,
+                     labels: Optional[Union[List[str], str]] = None,
+                     y_scale: str = "linear",
+                     grid: bool = True,
+                     dates: Optional[np.ndarray] = None) -> plt.Axes:
+    """
+    Plots individual trajectories over time with optional observed data.
+
+    Args:
+        stacked: Dictionary mapping column names to arrays of shape (n_simulations, timesteps)
+        columns: Column name(s) to plot
+        data: Optional DataFrame containing observed data
+        ax: Matplotlib axes to plot on
+        show_data: Whether to show observed data points
+        alpha: Alpha value for individual trajectories
+        title: Plot title
+        ylabel: Y-axis label
+        xlabel: X-axis label
+        show_legend: Whether to show legend
+        legend_loc: Legend location
+        palette: Color palette name
+        colors: Custom colors for lines
+        labels: Custom labels for legend
+        y_scale: Scale for y-axis ('linear' or 'log')
+        grid: Whether to show grid lines
+        dates: Array of dates for x-axis. If None, uses range(timesteps)
+
+    Returns:
+        plt.Axes: The matplotlib axes object
+    """
+    if not isinstance(columns, list):
+        columns = [columns]
+
+    if ax is None:
+        _, ax = plt.subplots(dpi=300, figsize=(10,4))
+
+    if colors is None:
+        colors = sns.color_palette(palette, len(columns))
+    elif not isinstance(colors, list):
+        colors = [colors]
+
+    if labels is None:
+        labels = columns
+    elif not isinstance(labels, list):
+        labels = [labels]
+
+    # Create x-axis values
+    if dates is None:
+        x = np.arange(stacked[columns[0]].shape[1])
+    else:
+        x = dates
+
+    # Plot each trajectory for each column
+    pleg = []
+    for column, color, label in zip(columns, colors, labels):
+        trajectories = stacked[column]
+        
+        # Plot individual trajectories
+        for traj in trajectories:
+            line = ax.plot(x, traj, color=color, alpha=alpha, linewidth=0.5, zorder=1)
+        
+        # Plot median trajectory with higher alpha
+        mean_traj = np.median(trajectories, axis=0)
+        line, = ax.plot(x, mean_traj, color=color, alpha=1.0, 
+                       linewidth=2, label=label, zorder=2)
+        pleg.append(line)
+
+    if show_data and data is not None:
+        p_actual = ax.scatter(x, data["data"], s=10, color="k", 
+                            zorder=3, label="observed")
+        if show_legend:
+            pleg.append(p_actual)
+
+    # Style improvements
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    
+    if grid:
+        ax.grid(axis="y", linestyle="--", linewidth=0.3, alpha=0.5, zorder=0)
+    
+    # Labels and formatting
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+    ax.set_yscale(y_scale)
+    
+    if show_legend and pleg:
+        ax.legend(pleg, labels + (["observed"] if show_data and data is not None else []), 
+                 loc=legend_loc, frameon=False)
+    
+    plt.tight_layout()
+    
+    return ax
 

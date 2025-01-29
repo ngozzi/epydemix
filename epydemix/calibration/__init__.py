@@ -1,8 +1,8 @@
 # epydemix/calibration/__init__.py
 
 from .metrics import rmse, wmape, ae, mae, mape
-from .calibration import calibrate, run_projections
 from .calibration_results import CalibrationResults
+from .abc import ABCSampler
 
 __all__ = [
     'rmse',
@@ -10,7 +10,6 @@ __all__ = [
     'ae',
     'mae',
     'mape',
-    'calibrate',
-    'run_projections',
-    'CalibrationResults'
+    'CalibrationResults',
+    'ABCSampler'
 ]
