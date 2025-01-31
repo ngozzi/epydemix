@@ -23,7 +23,7 @@ class Trajectory:
     transitions_idx: Dict[str, int]
     parameters: Dict[str, Any]
 
-    def resample(self, freq: str, method_compartments: str = 'last', method_transitions: str = 'sum', fill_method: str = 'ffill') -> 'Trajectory':
+    def resample(self, freq: str, method_compartments: str = 'last', method_transitions: str = 'sum', fill_method: str = 'ffill') -> None:
         """
         Resample trajectory to new frequency.
         
@@ -36,10 +36,7 @@ class Trajectory:
                 - 'bfill': Backward fill (use next valid observation)
                 - 'interpolate': Linear interpolation between points
                 Default is 'ffill'.
-
-        Returns:
-            Trajectory: New trajectory with resampled data
-            
+                    
         Raises:
             ValueError: If fill_method is not one of ['ffill', 'bfill', 'interpolate']
         """
@@ -64,11 +61,7 @@ class Trajectory:
             df_comp_resampled = df_comp_resampled.fillna(method=fill_method)
             df_trans_resampled = df_trans_resampled.fillna(0)
 
-        return Trajectory(
-            compartments={k: np.array(v) for k, v in df_comp_resampled.items()},
-            transitions={k: np.array(v) for k, v in df_trans_resampled.items()},
-            dates=df_comp_resampled.index.tolist(),
-            compartment_idx=self.compartment_idx,
-            transitions_idx=self.transitions_idx,
-            parameters=self.parameters
-        ) 
+        # Update 
+        self.compartments = {k: np.array(v) for k, v in df_comp_resampled.items()}
+        self.transitions = {k: np.array(v) for k, v in df_trans_resampled.items()}
+        self.dates = df_comp_resampled.index.tolist()

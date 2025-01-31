@@ -6,8 +6,10 @@ import numpy as np
 import pandas as pd
 from numpy.random import multinomial
 from ..population.population import Population, load_epydemix_population
-from typing import List, Dict, Optional, Union, Any, Callable, Tuple
+from typing import List, Dict, Optional, Union, Any, Callable
 import copy
+import inspect
+
 
 class EpiModel:
     """
@@ -18,7 +20,7 @@ class EpiModel:
         >>> model.add_compartment("S")\\
         ...      .add_compartment("I")\\
         ...      .add_compartment("R")
-        >>> model.add_transition(source="S", target="I", rate="beta", agent="I")
+        >>> model.add_transition(source="S", target="I", rate="beta", params={"agent": "I"})
         >>> model.add_transition(source="I", target="R", rate="gamma")
         >>> results = model.run_simulations(
         ...     start_date="2020-01-01",
@@ -105,8 +107,8 @@ class EpiModel:
             )
 
             # Initalize functions to compute transition probabilities
-            self.register_transition_function(kind="spontaneous", function=compute_spontaneous_transition_probability)
-            self.register_transition_function(kind="mediated", function=compute_mediated_transition_probability)
+            self.register_transition_kind(kind="spontaneous", function=compute_spontaneous_transition_probability)
+            self.register_transition_kind(kind="mediated", function=compute_mediated_transition_probability)
 
             # Load predefined model if specified
             if predefined_model is not None:
@@ -495,7 +497,8 @@ class EpiModel:
         if transition_name not in self.transitions_idx:
             self.transitions_idx[transition_name] = len(self.transitions_idx)
 
-    def register_transition_function(self, kind: str, function: Callable):
+
+    def register_transition_kind(self, kind: str, function: Callable):
         """
         Registers a transition function for a given kind of transition.
 
@@ -506,6 +509,7 @@ class EpiModel:
         Returns:
             None
         """
+        validate_transition_function(function)
         self.transition_functions[kind] = function
 
 
@@ -840,7 +844,7 @@ def simulate(epimodel,
     initial_conditions = apply_initial_conditions(epimodel, initial_conditions_dict)
 
     # Pre-compute contact matrices list
-    contact_matrices = [epimodel.Cs[date]["overall"] for date in simulation_dates]
+    contact_matrices = [epimodel.Cs[date] for date in simulation_dates]
     
     # Run simulation with pre-computed contacts
     compartments_evolution, transitions_evolution = stochastic_simulation(
@@ -865,15 +869,15 @@ def simulate(epimodel,
         # Check if resampling is needed (simulation dates frequency != requested frequency)
         sim_freq = pd.infer_freq(simulation_dates)
         if sim_freq != resample_frequency:
-            trajectory = trajectory.resample(resample_frequency, 
-                                             resample_aggregation_compartments, 
-                                             resample_aggregation_transitions, 
-                                             fill_method)
+            trajectory.resample(resample_frequency, 
+                                resample_aggregation_compartments, 
+                                resample_aggregation_transitions, 
+                                fill_method)
     return trajectory
 
 
 def stochastic_simulation(T: int,
-                         contact_matrices: List[np.ndarray],
+                         contact_matrices: List[Dict[str, np.ndarray]],
                          epimodel,
                          parameters: Dict,
                          initial_conditions: np.ndarray,
@@ -883,7 +887,7 @@ def stochastic_simulation(T: int,
     
     Args:
         T: Number of time steps
-        contact_matrices: Pre-computed list of contact matrices
+        contact_matrices: Pre-computed list of contact matrices dictionaries (key is the layer, value is the contact matrix)
         epimodel: The epidemic model
         parameters: Model parameters
         initial_conditions: Initial population distribution
@@ -908,7 +912,13 @@ def stochastic_simulation(T: int,
     comp_indices = epimodel.compartments_idx
 
     # create a dictionary to store the data needed for the transitions
-    transition_data = {}
+    system_data = {"parameters": parameters, 
+                   "t": 0,
+                   "comp_indices": comp_indices,
+                   "contact_matrix": contact_matrices[0],
+                   "pop": compartments_evolution[0],
+                   "pop_sizes": pop_sizes,
+                   "dt": dt}
     
     # Simulate each time step
     for t in range(T):
@@ -916,16 +926,10 @@ def stochastic_simulation(T: int,
         pop = compartments_evolution[t]
         new_pop[:] = pop  
 
-        # Create a dictionary to store the data needed for the transitions
-        transition_data = {
-            "parameters": parameters,
-            "t": t,
-            "comp_indices": comp_indices,
-            "contact_matrix": contact_matrix,
-            "pop": pop,
-            "pop_sizes": pop_sizes,
-            "dt": dt
-        }
+        # Update the dictionary to store the data needed for the transitions
+        system_data["t"] = t
+        system_data["contact_matrix"] = contact_matrix
+        system_data["pop"] = pop
         
         for comp in epimodel.compartments:
             transitions = epimodel.transitions[comp]
@@ -937,34 +941,14 @@ def stochastic_simulation(T: int,
 
             for tr in transitions:
                 target_idx = comp_indices[tr.target]
-
-                # compute the rate of the transition based on the kind
-                trans_prob = epimodel.transition_functions[tr.kind](tr.rate, tr.params, transition_data)
-
-                #env_copy = copy.deepcopy(parameters)
-                #rate = evaluate(expr=tr.rate, env=env_copy)[t]
-                #if tr.agent is not None:
-                #    agent_idx = comp_indices[tr.agent]
-                #    interaction = np.sum(
-                #        contact_matrix * pop[agent_idx] / pop_sizes, 
-                #        axis=1
-                #    )
-                #    rate *= interaction
-                #prob[target_idx] += rate * dt
-
+                trans_prob = epimodel.transition_functions[tr.kind](tr.rate, tr.params, system_data)
                 prob[target_idx] += trans_prob
             
-            # Compute transition probabilities 
-            #np.negative(prob, out=prob)
-            #np.exp(prob, out=prob)
-            #np.subtract(1, prob, out=prob)
             prob[source_idx] = 1 - np.sum(prob, axis=0)
-            
             current_pop = pop[source_idx]
             if not np.any(current_pop):
                 continue
-            
-            # Compute transitions using multinomial (vectorized)
+        
             delta = np.array([
                 multinomial(n, p) if n > 0 else np.zeros(C)
                 for n, p in zip(current_pop, prob.T)
@@ -986,27 +970,28 @@ def stochastic_simulation(T: int,
     return compartments_evolution[1:], transitions_evolution
 
 
-def compute_spontaneous_transition_probability(rate, params, transition_data): 
+def compute_spontaneous_transition_probability(rate, params, system_data): 
     """
     Compute the probability of a spontaneous transition.
 
     Args:
         rate: The rate of the transition
         params: The parameters of the transition
-        transition_data: The data needed for the transition
+        system_data: The data needed for the transition
     """
-    env_copy = copy.deepcopy(transition_data["parameters"])
-    rate_eval = evaluate(expr=rate[0], env=env_copy)[transition_data["t"]]
-    return 1 - np.exp(-rate_eval * transition_data["dt"])   
+    env_copy = copy.deepcopy(system_data["parameters"])
+    rate_eval = evaluate(expr=rate[0], env=env_copy)[system_data["t"]]
+    return 1 - np.exp(-rate_eval * system_data["dt"])   
 
-def compute_mediated_transition_probability(rate, params, transition_data): 
+
+def compute_mediated_transition_probability(rate, params, system_data): 
     """
     Compute the probability of a mediated transition.
 
     Args:
         rate: The rate of the transition
         params: The parameters of the transition. params["agent"] is the agent compartment
-        transition_data: A dictionary containing the data needed for the transition. 
+        system_data: A dictionary containing the data needed for the transition. 
             - parameters: The model parameters
             - t: The current time step
             - comp_indices: The indices of the compartments
@@ -1015,11 +1000,41 @@ def compute_mediated_transition_probability(rate, params, transition_data):
             - pop_sizes: The population sizes
             - dt: The time step size
     """
-    env_copy = copy.deepcopy(transition_data["parameters"])
-    rate_eval = evaluate(expr=rate[0], env=env_copy)[transition_data["t"]]
-    agent_idx = transition_data["comp_indices"][params["agent"]]
+    env_copy = copy.deepcopy(system_data["parameters"])
+    rate_eval = evaluate(expr=rate[0], env=env_copy)[system_data["t"]]
+    agent_idx = system_data["comp_indices"][params["agent"]]
     interaction = np.sum(
-            transition_data["contact_matrix"] * transition_data["pop"][agent_idx] / transition_data["pop_sizes"], 
+            system_data["contact_matrix"]["overall"] * system_data["pop"][agent_idx] / system_data["pop_sizes"], 
             axis=1
         )
-    return 1 - np.exp(-rate_eval * interaction * transition_data["dt"])
+    return 1 - np.exp(-rate_eval * interaction * system_data["dt"])
+
+
+def validate_transition_function(func: Callable) -> None:
+    """
+    Validates that a transition function has the correct signature and parameters.
+    
+    Args:
+        func: The transition function to validate
+        
+    Raises:
+        ValueError: If the function signature doesn't match requirements
+    """
+    # Get function signature
+    sig = inspect.signature(func)
+    params = sig.parameters
+    
+    # Check number of parameters
+    if len(params) != 3:
+        raise ValueError(
+            f"Transition function must take exactly 3 parameters. Got {len(params)}: {list(params.keys())}"
+        )
+    
+    # Check parameter names
+    expected_params = ['rate', 'params', 'system_data']
+    actual_params = list(params.keys())
+    
+    if actual_params != expected_params:
+        raise ValueError(
+            f"Transition function must have parameters named {expected_params}. Got {actual_params}"
+        )

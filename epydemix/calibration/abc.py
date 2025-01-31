@@ -1,4 +1,5 @@
-from typing import Callable, Dict, Any, Optional, List, Tuple
+from typing import Callable, Dict, Any, Optional, List
+import copy
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
@@ -9,7 +10,6 @@ from ..utils.abc_smc_utils import (
     DefaultPerturbationDiscrete, 
     sample_prior
 )
-from ..utils.utils import combine_simulation_outputs
 
 
 class ABCSampler:
@@ -51,7 +51,7 @@ class ABCSampler:
             raise ValueError(f"Unknown strategy: {strategy}. Must be one of {list(strategies.keys())}")
         
         self.results = strategies[strategy](**kwargs)
-        return self.results
+        return copy.deepcopy(self.results)
 
     def run_smc(self,
                 num_particles: int = 1000,
@@ -449,9 +449,7 @@ class ABCSampler:
             result = self.simulation_function(proj_params)
             projections.append(result)
 
-        # Create new results object
-        new_results = self.results.copy()  
-        new_results.projections[scenario_id] = projections
-        new_results.projection_parameters[scenario_id] = pd.DataFrame(posterior_samples)
+        self.results.projections[scenario_id] = projections
+        self.results.projection_parameters[scenario_id] = pd.DataFrame(posterior_samples)
  
-        return new_results
+        return copy.deepcopy(self.results)
