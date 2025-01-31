@@ -1,9 +1,8 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
 import datetime
-import copy
 
 @dataclass
 class CalibrationResults:
@@ -134,35 +133,3 @@ class CalibrationResults:
             ]
 
         return pd.DataFrame(data)
-
-    def copy(self) -> 'CalibrationResults':
-        """
-        Create a deep copy of the CalibrationResults object.
-        
-        Returns:
-            CalibrationResults: A new CalibrationResults object with copied data
-        """
-        return CalibrationResults(
-            calibration_strategy=self.calibration_strategy,
-            posterior_distributions={
-                gen: df.copy() for gen, df in self.posterior_distributions.items()
-            },
-            selected_trajectories={
-                gen: copy.deepcopy(traj) for gen, traj in self.selected_trajectories.items()
-            },
-            distances={
-                gen: dist.copy() for gen, dist in self.distances.items()
-            },
-            weights={
-                gen: w.copy() for gen, w in self.weights.items()
-            } if self.weights is not None else None,
-            projections={
-                scenario: copy.deepcopy(proj) for scenario, proj in self.projections.items()
-            } if self.projections is not None else {},
-            projection_parameters={
-                scenario: params.copy() for scenario, params in self.projection_parameters.items()
-            } if self.projection_parameters is not None else {},
-            observed_data=copy.deepcopy(self.observed_data),
-            priors=copy.deepcopy(self.priors),
-            calibration_params=copy.deepcopy(self.calibration_params)
-        )
