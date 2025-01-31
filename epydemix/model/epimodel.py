@@ -903,33 +903,33 @@ def stochastic_simulation(T: int,
     
     # Pre-compute population sizes and create views for better performance
     pop_sizes = epimodel.population.Nk
+    comp_indices = epimodel.compartments_idx
     
     # Pre-allocate arrays for probabilities and transitions
     prob = np.zeros((C, N), dtype=np.float64)
     new_pop = np.zeros((C, N), dtype=np.float64)
-    
-    # Pre-compute indices for better performance
-    comp_indices = epimodel.compartments_idx
 
     # create a dictionary to store the data needed for the transitions
-    system_data = {"parameters": parameters, 
-                   "t": 0,
-                   "comp_indices": comp_indices,
-                   "contact_matrix": contact_matrices[0],
-                   "pop": compartments_evolution[0],
-                   "pop_sizes": pop_sizes,
-                   "dt": dt}
+    system_data = {
+        "parameters": parameters, 
+        "t": 0,
+        "comp_indices": comp_indices,
+        "contact_matrix": None,
+        "pop": None,
+        "pop_sizes": pop_sizes,
+        "dt": dt
+        }
     
     # Simulate each time step
     for t in range(T):
-        contact_matrix = contact_matrices[t]
-        pop = compartments_evolution[t]
-        new_pop[:] = pop  
+        # Update system data with current state
+        system_data.update({
+            "t": t,
+            "contact_matrix": contact_matrices[t],
+            "pop": compartments_evolution[t]
+        })
 
-        # Update the dictionary to store the data needed for the transitions
-        system_data["t"] = t
-        system_data["contact_matrix"] = contact_matrix
-        system_data["pop"] = pop
+        new_pop[:] = compartments_evolution[t]
         
         for comp in epimodel.compartments:
             transitions = epimodel.transitions[comp]
@@ -938,17 +938,21 @@ def stochastic_simulation(T: int,
                 
             prob.fill(0)
             source_idx = comp_indices[comp]
+            current_pop = compartments_evolution[t, source_idx]
+
+            if not np.any(current_pop):
+                continue
 
             for tr in transitions:
                 target_idx = comp_indices[tr.target]
-                trans_prob = epimodel.transition_functions[tr.kind](tr.rate, tr.params, system_data)
+                trans_prob = epimodel.transition_functions[tr.kind](
+                    tr.rate, tr.params, system_data
+                )
                 prob[target_idx] += trans_prob
             
+            # Compute remaining probability
             prob[source_idx] = 1 - np.sum(prob, axis=0)
-            current_pop = pop[source_idx]
-            if not np.any(current_pop):
-                continue
-        
+            
             delta = np.array([
                 multinomial(n, p) if n > 0 else np.zeros(C)
                 for n, p in zip(current_pop, prob.T)
@@ -958,11 +962,10 @@ def stochastic_simulation(T: int,
             for tr in transitions:
                 tr_name = f"{tr.source}_to_{tr.target}"
                 tr_idx = epimodel.transitions_idx[tr_name]
-                transitions_evolution[t, tr_idx] = delta[:, epimodel.compartments_idx[tr.target]]
+                transitions_evolution[t, tr_idx] += delta[:, epimodel.compartments_idx[tr.target]]
             
             # Update populations
-            np.subtract(new_pop[source_idx], np.sum(delta, axis=1), 
-                       out=new_pop[source_idx])
+            np.subtract(new_pop[source_idx], np.sum(delta, axis=1), out=new_pop[source_idx])
             new_pop += delta.T
         
         compartments_evolution[t + 1] = new_pop
@@ -1038,3 +1041,4 @@ def validate_transition_function(func: Callable) -> None:
         raise ValueError(
             f"Transition function must have parameters named {expected_params}. Got {actual_params}"
         )
+    
