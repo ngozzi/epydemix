@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from numpy.random import multinomial
 from ..population.population import Population, load_epydemix_population
-from typing import List, Dict, Optional, Union, Any, Callable
+from typing import List, Dict, Optional, Union, Any, Callable, Tuple
 import copy
 import inspect
 
@@ -16,12 +16,9 @@ class EpiModel:
     EpiModel: A compartmental epidemic model simulator
     
     Example:
-        >>> model = EpiModel()
-        >>> model.add_compartment("S")\\
-        ...      .add_compartment("I")\\
-        ...      .add_compartment("R")
-        >>> model.add_transition(source="S", target="I", rate="beta", params={"agent": "I"})
-        >>> model.add_transition(source="I", target="R", rate="gamma")
+        >>> model = EpiModel(compartments=["S", "I", "R"], parameters={"beta": 0.3, "gamma": 0.1})
+        >>> model.add_transition(source="S", target="I", params={"rate": "beta", "agent": "I"})
+        >>> model.add_transition(source="I", target="R", params={"rate": "gamma"})
         >>> results = model.run_simulations(
         ...     start_date="2020-01-01",
         ...     end_date="2020-12-31",
@@ -39,17 +36,14 @@ class EpiModel:
                  contacts_source: Optional[str] = None, 
                  age_group_mapping: Optional[Dict] = None, 
                  supported_contacts_sources: Optional[List] = None, 
-                 use_default_population: bool = True,
-                 predefined_model: Optional[str] = None,  
-                 transmission_rate: float = 0.3,  
-                 recovery_rate: float = 0.1,
-                 incubation_rate: float = 0.2) -> None:
+                 use_default_population: bool = True) -> None:
             """
             Initializes the EpiModel instance.
 
             Args:
                 name (str, optional): The name of the epidemic model. Defaults to "EpiModel".
                 compartments (list, optional): A list of compartments for the model. Defaults to an empty list if None.
+                parameters (dict, optional): A dictionary of parameters for the model. Defaults to an empty dictionary if None.
                 population_name (str, optional): The name of the population to load or create. Defaults to 'epydemix_population'.
                 population_data_path (str or None, optional): The path to the population data.
                 contact_layers (list or None, optional): A list of contact layers to load for the population. Defaults to 
@@ -59,11 +53,6 @@ class EpiModel:
                 supported_contacts_sources (list or None, optional): A list of supported contact data sources. Defaults to 
                     ["prem_2017", "prem_2021", "mistry_2021"] if None.
                 use_default_population (bool, optional): If True, creates a default population; if False, tries to load the population from the provided path and population name. Defaults to True.
-                predefined_model (str, optional): Load a predefined model like "SIR", "SEIR", etc. Defaults to None.
-                transmission_rate (float, optional): Transmission rate for predefined models. Defaults to 0.3.
-                recovery_rate (float, optional): Recovery rate for predefined models. Defaults to 0.1.
-                incubation_rate (float, optional): Incubation rate for SEIR models. Defaults to 0.2.
-
             Returns:
                 None
             """
@@ -84,6 +73,8 @@ class EpiModel:
             # Handle default empty lists for compartments and contact layers
             if compartments is None:
                 compartments = []
+            self.add_compartments(compartments)
+            
             if contact_layers is None:
                 contact_layers = ["school", "work", "home", "community"]
 
@@ -110,12 +101,6 @@ class EpiModel:
             self.register_transition_kind(kind="spontaneous", function=compute_spontaneous_transition_probability)
             self.register_transition_kind(kind="mediated", function=compute_mediated_transition_probability)
 
-            # Load predefined model if specified
-            if predefined_model is not None:
-                self.load_predefined_model(predefined_model, transmission_rate, recovery_rate, incubation_rate)
-            else:
-                self.add_compartments(compartments)  # Add custom compartments if no predefined model
-
 
     def __repr__(self) -> str:
         """
@@ -139,7 +124,7 @@ class EpiModel:
         if len(self.transitions_list) > 0:
             repr_str += "  Transitions between compartments:\n"
             for tr in self.transitions_list:
-                repr_str += f"    {tr.source} -> {tr.target}, rate: {tr.rate}, params: {tr.params} (kind: {tr.kind})\n"
+                repr_str += f"    {tr.source} -> {tr.target}, params: {tr.params} (kind: {tr.kind})\n"
         else:
             repr_str += "  No transitions defined\n"
 
@@ -160,73 +145,6 @@ class EpiModel:
             repr_str += "    " + ", ".join([str(name) for name in self.population.Nk_names]) + "\n"
 
         return repr_str
-
-
-    def load_predefined_model(self, model_name: str, transmission_rate: float = 0.3, recovery_rate: float = 0.1, incubation_rate : float = 0.2) -> None:
-        """
-        Loads a predefined epidemic model (e.g., SIR, SEIR, SIS) with predefined compartments and transitions.
-
-        Args:
-            model_name (str): The name of the predefined model to load (e.g., "SIR").
-            transmission_rate (float, optional): The transmission rate for the SIR model. Default is 0.3.
-            recovery_rate (float, optional): The recovery rate for the SIR model. Default is 0.1.
-            incubation_rate (float, optional): The incubation rate for the SEIR model. Default is 0.2.
-        
-        Raises:
-            ValueError: If the model_name is not recognized.
-        """
-        if model_name.upper() == "SIR":
-            # SIR model setup
-            self.clear_compartments()
-            self.clear_transitions()
-
-            # Add SIR compartments
-            self.add_compartments(["Susceptible", "Infected", "Recovered"])
-
-            # Add parameters for SIR model
-            self.add_parameter(name="transmission_rate", value=transmission_rate)
-            self.add_parameter(name="recovery_rate", value=recovery_rate)
-
-            # Add transitions for SIR model
-            self.add_transition(source="Susceptible", target="Infected", rate="transmission_rate", params={"agent": "Infected"}, kind="mediated")
-            self.add_transition(source="Infected", target="Recovered", rate="recovery_rate", kind="spontaneous" )
-
-        elif model_name.upper() == "SEIR":
-            # SEIR model setup (Susceptible, Exposed, Infected, Recovered)
-            self.clear_compartments()
-            self.clear_transitions()
-
-            # Add SEIR compartments
-            self.add_compartments(["Susceptible", "Exposed", "Infected", "Recovered"])
-
-            # Add parameters for SEIR model
-            self.add_parameter(name="transmission_rate", value=transmission_rate)
-            self.add_parameter(name="incubation_rate", value=incubation_rate)
-            self.add_parameter(name="recovery_rate", value=recovery_rate)
-
-            # Add transitions for SEIR model
-            self.add_transition(source="Susceptible", target="Exposed", rate="transmission_rate", params={"agent": "Infected"}, kind="mediated")
-            self.add_transition(source="Exposed", target="Infected", rate="incubation_rate", kind="spontaneous") 
-            self.add_transition(source="Infected", target="Recovered", rate="recovery_rate", kind="spontaneous")
-
-        elif model_name.upper() == "SIS":
-            # SIS model setup (Susceptible, Infected)
-            self.clear_compartments()
-            self.clear_transitions()
-
-            # Add SIS compartments
-            self.add_compartments(["Susceptible", "Infected"])
-
-            # Add parameters for SIS model
-            self.add_parameter(name="transmission_rate", value=transmission_rate)
-            self.add_parameter(name="recovery_rate", value=recovery_rate)
-
-            # Add transitions for SIS model
-            self.add_transition(source="Susceptible", target="Infected", rate="transmission_rate", params={"agent": "Infected"}, kind="mediated")
-            self.add_transition(source="Infected", target="Susceptible", rate="recovery_rate", kind="spontaneous")
-
-        else:
-            raise ValueError(f"Unknown predefined model: {model_name}")
 
 
     def _load_or_create_population(self, 
@@ -468,7 +386,7 @@ class EpiModel:
         self.overrides = {}
 
 
-    def add_transition(self, source: str, target: str, kind: str, rate: Union[str, List[str]], params: Optional[Dict]=None) -> None:
+    def add_transition(self, source: str, target: str, kind: str, params: Any) -> None:
         """
         Adds a transition to the epidemic model.
 
@@ -476,8 +394,7 @@ class EpiModel:
             source (str): The source compartment of the transition.
             target (str): The target compartment of the transition.
             kind (str): The kind of transition (e.g., spontaneous or mediated).
-            rate (Union[str, List[str]]): The expression representing the rate(s) of the transition.
-            params (Optional[Dict]): The dictionary of parameters involved in the transition.
+            params (Any): The parameters involved in the transition.
 
         Raises:
             ValueError: If the source or target is not in the compartments list.
@@ -489,7 +406,7 @@ class EpiModel:
         if missing_compartments:
             raise ValueError(f"These compartments are not in the compartments list: {', '.join(missing_compartments)}")
         
-        transition = Transition(source=source, target=target, kind=kind, rate=rate, params=params)
+        transition = Transition(source=source, target=target, kind=kind, params=params)
         self.transitions_list.append(transition)
         self.transitions[source].append(transition)
 
@@ -903,33 +820,33 @@ def stochastic_simulation(T: int,
     
     # Pre-compute population sizes and create views for better performance
     pop_sizes = epimodel.population.Nk
+    comp_indices = epimodel.compartments_idx
     
     # Pre-allocate arrays for probabilities and transitions
     prob = np.zeros((C, N), dtype=np.float64)
     new_pop = np.zeros((C, N), dtype=np.float64)
-    
-    # Pre-compute indices for better performance
-    comp_indices = epimodel.compartments_idx
 
     # create a dictionary to store the data needed for the transitions
-    system_data = {"parameters": parameters, 
-                   "t": 0,
-                   "comp_indices": comp_indices,
-                   "contact_matrix": contact_matrices[0],
-                   "pop": compartments_evolution[0],
-                   "pop_sizes": pop_sizes,
-                   "dt": dt}
+    system_data = {
+        "parameters": parameters, 
+        "t": 0,
+        "comp_indices": comp_indices,
+        "contact_matrix": None,
+        "pop": None,
+        "pop_sizes": pop_sizes,
+        "dt": dt
+        }
     
     # Simulate each time step
     for t in range(T):
-        contact_matrix = contact_matrices[t]
-        pop = compartments_evolution[t]
-        new_pop[:] = pop  
+        # Update system data with current state
+        system_data.update({
+            "t": t,
+            "contact_matrix": contact_matrices[t],
+            "pop": compartments_evolution[t]
+        })
 
-        # Update the dictionary to store the data needed for the transitions
-        system_data["t"] = t
-        system_data["contact_matrix"] = contact_matrix
-        system_data["pop"] = pop
+        new_pop[:] = compartments_evolution[t]
         
         for comp in epimodel.compartments:
             transitions = epimodel.transitions[comp]
@@ -938,17 +855,21 @@ def stochastic_simulation(T: int,
                 
             prob.fill(0)
             source_idx = comp_indices[comp]
+            current_pop = compartments_evolution[t, source_idx]
+
+            if not np.any(current_pop):
+                continue
 
             for tr in transitions:
                 target_idx = comp_indices[tr.target]
-                trans_prob = epimodel.transition_functions[tr.kind](tr.rate, tr.params, system_data)
+                trans_prob = epimodel.transition_functions[tr.kind](
+                    tr.params, system_data
+                )
                 prob[target_idx] += trans_prob
             
+            # Compute remaining probability
             prob[source_idx] = 1 - np.sum(prob, axis=0)
-            current_pop = pop[source_idx]
-            if not np.any(current_pop):
-                continue
-        
+            
             delta = np.array([
                 multinomial(n, p) if n > 0 else np.zeros(C)
                 for n, p in zip(current_pop, prob.T)
@@ -958,11 +879,10 @@ def stochastic_simulation(T: int,
             for tr in transitions:
                 tr_name = f"{tr.source}_to_{tr.target}"
                 tr_idx = epimodel.transitions_idx[tr_name]
-                transitions_evolution[t, tr_idx] = delta[:, epimodel.compartments_idx[tr.target]]
+                transitions_evolution[t, tr_idx] += delta[:, epimodel.compartments_idx[tr.target]]
             
             # Update populations
-            np.subtract(new_pop[source_idx], np.sum(delta, axis=1), 
-                       out=new_pop[source_idx])
+            np.subtract(new_pop[source_idx], np.sum(delta, axis=1), out=new_pop[source_idx])
             new_pop += delta.T
         
         compartments_evolution[t + 1] = new_pop
@@ -970,28 +890,26 @@ def stochastic_simulation(T: int,
     return compartments_evolution[1:], transitions_evolution
 
 
-def compute_spontaneous_transition_probability(rate, params, system_data): 
+def compute_spontaneous_transition_probability(params, data): 
     """
     Compute the probability of a spontaneous transition.
 
     Args:
-        rate: The rate of the transition
         params: The parameters of the transition
-        system_data: The data needed for the transition
+        data: The data needed for the transition
     """
-    env_copy = copy.deepcopy(system_data["parameters"])
-    rate_eval = evaluate(expr=rate[0], env=env_copy)[system_data["t"]]
-    return 1 - np.exp(-rate_eval * system_data["dt"])   
+    env_copy = copy.deepcopy(data["parameters"])
+    rate_eval = evaluate(expr=params["rate"], env=env_copy)[data["t"]]
+    return 1 - np.exp(-rate_eval * data["dt"])   
 
 
-def compute_mediated_transition_probability(rate, params, system_data): 
+def compute_mediated_transition_probability(params, data): 
     """
     Compute the probability of a mediated transition.
 
     Args:
-        rate: The rate of the transition
         params: The parameters of the transition. params["agent"] is the agent compartment
-        system_data: A dictionary containing the data needed for the transition. 
+        data: A dictionary containing the data needed for the transition. 
             - parameters: The model parameters
             - t: The current time step
             - comp_indices: The indices of the compartments
@@ -1000,14 +918,14 @@ def compute_mediated_transition_probability(rate, params, system_data):
             - pop_sizes: The population sizes
             - dt: The time step size
     """
-    env_copy = copy.deepcopy(system_data["parameters"])
-    rate_eval = evaluate(expr=rate[0], env=env_copy)[system_data["t"]]
-    agent_idx = system_data["comp_indices"][params["agent"]]
+    env_copy = copy.deepcopy(data["parameters"])
+    rate_eval = evaluate(expr=params["rate"], env=env_copy)[data["t"]]
+    agent_idx = data["comp_indices"][params["agent"]]
     interaction = np.sum(
-            system_data["contact_matrix"]["overall"] * system_data["pop"][agent_idx] / system_data["pop_sizes"], 
+            data["contact_matrix"]["overall"] * data["pop"][agent_idx] / data["pop_sizes"], 
             axis=1
         )
-    return 1 - np.exp(-rate_eval * interaction * system_data["dt"])
+    return 1 - np.exp(-rate_eval * interaction * data["dt"])
 
 
 def validate_transition_function(func: Callable) -> None:
@@ -1025,16 +943,17 @@ def validate_transition_function(func: Callable) -> None:
     params = sig.parameters
     
     # Check number of parameters
-    if len(params) != 3:
+    if len(params) != 2:
         raise ValueError(
-            f"Transition function must take exactly 3 parameters. Got {len(params)}: {list(params.keys())}"
+            f"Transition function must take exactly 2 parameters. Got {len(params)}: {list(params.keys())}"
         )
     
     # Check parameter names
-    expected_params = ['rate', 'params', 'system_data']
+    expected_params = ['params', 'data']
     actual_params = list(params.keys())
     
     if actual_params != expected_params:
         raise ValueError(
             f"Transition function must have parameters named {expected_params}. Got {actual_params}"
         )
+    
