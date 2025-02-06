@@ -1,4 +1,4 @@
-from typing import Union, List, Optional, Dict
+from typing import Any
 
 class Transition:
     """
@@ -10,11 +10,10 @@ class Transition:
         source (str): The source compartment of the transition.
         target (str): The target compartment of the transition.
         kind (str): The kind of transition (e.g., spontaneous or mediated).
-        rate (Union[str, List[str]]): The expression representing the rate(s) of the transition.
-        params (Dict): The dictionary of parameters involved in the transition.
+        params (Any): The parameters involved in the transition.
     """
 
-    def __init__(self, source: str, target: str, kind: str, rate: Union[str, List[str]], params: Optional[Dict]=None) -> None:
+    def __init__(self, source: str, target: str, kind: str, params: Any) -> None:
         """
         Initializes the Transition object.
 
@@ -22,8 +21,7 @@ class Transition:
             source (str): The source compartment of the transition.
             target (str): The target compartment of the transition.
             kind (str): The kind of transition (e.g., spontaneous or mediated).
-            rate (Union[str, List[str]]): The expression representing the rate(s) of the transition.
-            params (Dict): The dictionary of parameters involved in the transition.
+            params (Any): The parameters involved in the transition.
 
         Returns:
             None
@@ -31,11 +29,4 @@ class Transition:
         self.source = source
         self.target = target
         self.kind = kind
-        if not isinstance(rate, list):
-            self.rate = [rate]
-        else:
-            self.rate = rate
-        if params is None:
-            self.params = {}
-        else:
-            self.params = params
+        self.params = params
