@@ -29,5 +29,6 @@ exclude_patterns = []
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
-sys.path.insert(0, os.path.abspath('../../epydemix'))  
+sys.path.insert(0, os.path.abspath('../../epydemix')) 
+print(sys.path)
 autodoc_mock_imports = ["epydemix"]
