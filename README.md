@@ -1,6 +1,5 @@
 # Epydemix, the ABC of Epidemics
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyPI](https://badge.fury.io/py/epydemix.svg)](https://test.pypi.org/project/epydemix/1.0.0/)
 [![Read the Docs](https://readthedocs.org/projects/epydemix/badge/?version=latest)](https://epydemix.readthedocs.io/en/latest/?badge=latest)
 
 
