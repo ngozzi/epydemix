@@ -30,6 +30,4 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 sys.path.insert(0, os.path.abspath('../../epydemix'))  
-
-import epydemix  # Try manually importing it to see if it's found
-print(f"Epydemix found at: {epydemix.__file__}")  # Debugging
+autodoc_mock_imports = ["epydemix"]
