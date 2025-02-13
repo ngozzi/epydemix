@@ -1,15 +1,16 @@
 # Epydemix, the ABC of Epidemics
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI](https://badge.fury.io/py/epydemix.svg)](https://badge.fury.io/py/epydemix)
+[![Read the Docs](https://readthedocs.org/projects/epydemix/badge/?version=latest)](https://epydemix.readthedocs.io/en/latest/?badge=latest)
 
 
-**Epydemix** is a Python package for epidemic modeling and simulation. It provides tools to create, run, and analyze epidemiological models, allowing users to simulate the spread of infectious diseases using different compartmental models, contact layers, and calibration techniques.
+**Epydemix** is a Python package for epidemic modeling. It provides tools to create, calibrate, and analyze epidemic models, allowing users to simulate the spread of infectious diseases using different compartmental models, contact layers, and calibration techniques. It is designed to be used in conjunction with the [epydemix-data](https://github.com/ngozzi/epydemix-data/) package to load population and contact matrix data.
 
 ## Features
-
-- **Design and simulate epidemic models** with customizable compartmental frameworks, including widely-used models like SIR, SEIR, and more complex structures tailored to specific scenarios.
-- **Load or create detailed real-world population datasets** for over 400 locations worldwide, incorporating demographic and contact patterns.
-- **Run simulations** and explore model outcomes and trends over time with powerful visualizations.
-- **Effortlessly calibrate your models** to real-world epidemiological data, ensuring accuracy and relevance by fine-tuning key parameters using Approximate Bayesian Computation frameworks.
+- **Design and simulate epidemic models** with customizable compartmental and transition frameworks, from widely-used models like SIR, SEIR to more complex structures tailored to specific scenarios.
+- **Load or create detailed real-world population datasets** for over 400 locations worldwide, incorporating age distribution and contact matrices.
+- **Run simulations** and explore model outcomes and trends over time with informative visualizations.
+- **Calibrate your models** to real-world epidemiological with Approximate Bayesian Computation frameworks.
 
 
 ## Installation
@@ -55,17 +56,36 @@ Once installed, you can start using **epydemix** in your Python scripts or Jupyt
 from epydemix import EpiModel 
 from epydemix.visualization import plot_quantiles
 
-# Create a new epidemic model
-model = EpiModel(predefined_model="SIR")
+# Defining a basic SIR model
+model = EpiModel(
+    name='SIR Model',
+    compartments=['S', 'I', 'R'],  # Susceptible, Infected, Recovered
+)
+model.add_transition(source='S', target='I', params=(0.3, "I"), kind='mediated')
+model.add_transition(source='I', target='R', params=0.1, kind='spontaneous')
 
-# Run 100 stochastic simulations specifying time frame 
-results = model.run_simulations(start_date="2019-12-01", 
-                                end_date="2020-04-01",
-                                Nsim=100)
+# Running the model
+results = model.run_simulations(
+    start_date="2024-01-01",
+    end_date="2024-04-10",
+    Nsim=100)
 
-# Plot results 
+# Plotting the results
+df_quantiles_comps = results.get_quantiles_compartments()
 plot_quantiles(results, columns=["I_total", "S_total", "R_total"])
 ```
+
+### Tutorials
+We provide a series of tutorials to help you get started with **epydemix**.
+
+- [Tutorial 1](https://github.com/ngozzi/epydemix/blob/main/tutorials/1_Model_Definition_and_Simulation.ipynb): An Introduction to Model Definition and Simulation
+- [Tutorial 2](https://github.com/ngozzi/epydemix/blob/main/tutorials/2_Modeling_with_Population_Data.ipynb): Using Population Data from Epydemix Data
+- [Tutorial 3](https://github.com/ngozzi/epydemix/blob/main/tutorials/3_Modeling_Interventions.ipynb): Modeling Non-pharmaceutical Interventions
+- [Tutorial 4](https://github.com/ngozzi/epydemix/blob/main/tutorials/4_Model_Calibration_part1.ipynb): Model Calibration with ABC (Part 1)
+- [Tutorial 5](https://github.com/ngozzi/epydemix/blob/main/tutorials/5_Model_Calibration_part2.ipynb): Model Calibration with ABC (Part 2)
+- [Tutorial 6](https://github.com/ngozzi/epydemix/blob/main/tutorials/6_Advanced_Modeling_Features.ipynb): Advanced Modeling Features
+- [Tutorial 7](https://github.com/ngozzi/epydemix/blob/main/tutorials/7_Covid-19_Example.ipynb): COVID-19 Case Study
+
 
 ## Epydemix Data
 
@@ -91,13 +111,6 @@ Epydemix can load data either locally from a folder or directly from online sour
 
 For more information about the available population and contact matrices and to download the data, please visit the [dedicated repository](https://github.com/ngozzi/epydemix-data/).
 
-
-### Main Modules
-
-- **`epydemix.model`**: Core classes for building and running epidemic models.
-- **`epydemix.calibration`**: Tools for calibrating models to real-world data.
-- **`epydemix.visualization`**: Visualization functions for plotting simulation results.
-- **`epydemix.utils`**: Utility functions and additional tools.
 
 
 ## License
