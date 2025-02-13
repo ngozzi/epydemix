@@ -17,8 +17,8 @@ class EpiModel:
     
     Example:
         >>> model = EpiModel(compartments=["S", "I", "R"], parameters={"beta": 0.3, "gamma": 0.1})
-        >>> model.add_transition(source="S", target="I", params={"rate": "beta", "agent": "I"})
-        >>> model.add_transition(source="I", target="R", params={"rate": "gamma"})
+        >>> model.add_transition(source="S", target="I", params=("beta", "I"))
+        >>> model.add_transition(source="I", target="R", params="gamma")
         >>> results = model.run_simulations(
         ...     start_date="2020-01-01",
         ...     end_date="2020-12-31",
@@ -594,7 +594,7 @@ class EpiModel:
         total_population_per_age_group = np.array(population)
 
         # Get compartments that are agents in transitions
-        agent_compartments = [tr.params["agent"] for tr in self.transitions_list if tr.kind == "mediated"]
+        agent_compartments = [tr.params[1] for tr in self.transitions_list if tr.kind == "mediated"]
         
         # Get compartments that are sources in transitions with agents
         source_compartments = [tr.source for tr in self.transitions_list if tr.kind == "mediated"]
@@ -898,9 +898,12 @@ def compute_spontaneous_transition_probability(params, data):
         params: The parameters of the transition
         data: The data needed for the transition
     """
-    env_copy = copy.deepcopy(data["parameters"])
-    rate_eval = evaluate(expr=params["rate"], env=env_copy)[data["t"]]
-    return 1 - np.exp(-rate_eval * data["dt"])   
+    if isinstance(params, str):
+        env_copy = copy.deepcopy(data["parameters"])
+        rate_eval = evaluate(expr=params, env=env_copy)[data["t"]]
+        return 1 - np.exp(-rate_eval * data["dt"])
+    else:
+        return 1 - np.exp(-params * data["dt"])   
 
 
 def compute_mediated_transition_probability(params, data): 
@@ -918,9 +921,12 @@ def compute_mediated_transition_probability(params, data):
             - pop_sizes: The population sizes
             - dt: The time step size
     """
-    env_copy = copy.deepcopy(data["parameters"])
-    rate_eval = evaluate(expr=params["rate"], env=env_copy)[data["t"]]
-    agent_idx = data["comp_indices"][params["agent"]]
+    if isinstance(params[0], str):
+        env_copy = copy.deepcopy(data["parameters"])
+        rate_eval = evaluate(expr=params[0], env=env_copy)[data["t"]]
+    else: 
+        rate_eval = params[0]
+    agent_idx = data["comp_indices"][params[1]]
     interaction = np.sum(
             data["contact_matrix"]["overall"] * data["pop"][agent_idx] / data["pop_sizes"], 
             axis=1

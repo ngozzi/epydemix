@@ -753,7 +753,7 @@ def plot_spectral_radius(epimodel: Any,
 
     # Legend if interventions are shown
     if show_interventions and hasattr(epimodel, 'interventions'):
-        ax.legend(bbox_to_anchor=(1.05, 1), loc=legend_loc, fontsize=fontsize-2)
+        ax.legend(loc=legend_loc, fontsize=fontsize-2)
 
     # Adjust layout
     plt.tight_layout()
@@ -904,79 +904,6 @@ def plot_distance_distribution(distances: Union[np.ndarray, List[float], pd.Seri
     plt.tight_layout()
 
     return ax
-
-
-def plot_projections(projections: Any, 
-                     calibration_results: Any, 
-                     ax: Optional[plt.Axes] = None, 
-                     show_data: bool = True, 
-                     columns: Union[str, List[str]] = "data", 
-                     lower_q: float = 0.05, 
-                     upper_q: float = 0.95, 
-                     show_median: bool = True, 
-                     ci_alpha: float = 0.3, 
-                     title: str = "", 
-                     show_legend: bool = True, 
-                     ylabel: str = "", 
-                     palette: str = "Dark2") -> None:
-    """
-    Plots the projections along with the selected quantiles from the calibration results.
-
-    Args:
-        projections (Any): The projection data, typically containing the simulated results with quantiles.
-        calibration_results (Any): An object containing the calibration results, including selected quantiles and observed data.
-        ax (Optional[plt.Axes], optional): A matplotlib axes object to plot on (default is None, which creates a new figure and axes).
-        show_data (bool, optional): Whether to show the observed data points (default is True).
-        columns (Union[str, List[str]], optional): The columns to plot from the quantiles data (default is "data").
-        lower_q (float, optional): The lower quantile to plot (default is 0.05).
-        upper_q (float, optional): The upper quantile to plot (default is 0.95).
-        show_median (bool, optional): Whether to show the median line (default is True).
-        ci_alpha (float, optional): The alpha value for the confidence interval shading (default is 0.3).
-        title (str, optional): The title of the plot (default is an empty string).
-        show_legend (bool, optional): Whether to show the legend (default is True).
-        ylabel (str, optional): The label for the y-axis (default is an empty string).
-        palette (str, optional): The color palette to use for the plot (default is "Set2").
-
-    Returns:
-        None: This function does not return any values; it produces a plot.
-    """
-    
-    if not isinstance(columns, list):
-        columns = [columns]
-    
-    if ax is None:
-        fig, ax = plt.subplots(dpi=300, figsize=(10,4))
-
-    # get data
-    calibration_quantiles = calibration_results.get_selected_quantiles()
-    data = calibration_results.get_data()
-
-    colors = sns.color_palette(palette, len(columns))
-    t = 0
-
-    pleg, handles = [], []
-    for column in columns:
-        if show_median:
-            df_med = get_timeseries_data(projections, column, 0.5)
-            p1, = ax.plot(df_med.date, df_med[column].values, color=colors[t])
-
-        df_q1 = get_timeseries_data(projections, column, lower_q)
-        df_q2 = get_timeseries_data(projections, column, upper_q)
-        p2 = ax.fill_between(df_q1.date, df_q1[column].values, df_q2[column].values, alpha=ci_alpha, color=colors[t], linewidth=0.)
-        pleg.append((p1, p2))
-        handles.append(f"median ({np.round((1 - lower_q * 2) * 100, 0)}% CI)")
-        t += 1
-
-    if show_data: 
-        p_actual = ax.scatter(calibration_quantiles.date.unique(), data["data"], s=10, color="k", zorder=1)
-
-    ax.spines["right"].set_visible(False)
-    ax.spines["top"].set_visible(False)
-    ax.grid(axis="y", linestyle="--", linewidth=0.3)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    if show_legend:
-        ax.legend(pleg + [p_actual], handles + ["actual"], loc="upper left", frameon=False)
 
 
 def plot_trajectories(stacked: Dict[str, np.ndarray],
