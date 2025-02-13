@@ -5,12 +5,6 @@
 
 **Epydemix** is a Python package for epidemic modeling. It provides tools to create, calibrate, and analyze epidemic models, allowing users to simulate the spread of infectious diseases using different compartmental models, contact layers, and calibration techniques. It is designed to be used in conjunction with the [epydemix-data](https://github.com/ngozzi/epydemix-data/) package to load population and contact matrix data.
 
-## Features
-- **Design and simulate epidemic models** with customizable compartmental and transition frameworks, from widely-used models like SIR, SEIR to more complex structures tailored to specific scenarios.
-- **Load or create detailed real-world population datasets** for over 400 locations worldwide, incorporating age distribution and contact matrices.
-- **Run simulations** and explore model outcomes and trends over time with informative visualizations.
-- **Calibrate your models** to real-world epidemiological with Approximate Bayesian Computation frameworks.
-
 
 ## Installation
 
@@ -33,16 +27,6 @@ pip install epydemix
 ```
 
 ---
-
-### Optional: Installing for Development
-
-If you plan to contribute or modify the package, you can install it in editable mode:
-
-```bash
-git clone https://github.com/ngozzi/epydemix.git
-cd epydemix
-pip install -e .
-```
 
 
 ## Quick Start
