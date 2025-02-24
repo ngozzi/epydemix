@@ -2,6 +2,9 @@ import os
 import sys
 import sphinx_rtd_theme
 
+sys.path.insert(0, os.path.abspath('../..'))  # adjust path to point to your package root
+
+
 project = 'epydemix'
 copyright = '2025, Nicolò Gozzi'
 author = 'Nicolò Gozzi'
