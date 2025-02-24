@@ -12,6 +12,22 @@ epydemix.model.epimodel module
    :undoc-members:
    :show-inheritance:
 
+epydemix.model.predefined\_models module
+----------------------------------------
+
+.. automodule:: epydemix.model.predefined_models
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+epydemix.model.simulation\_output module
+----------------------------------------
+
+.. automodule:: epydemix.model.simulation_output
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 epydemix.model.simulation\_results module
 -----------------------------------------
 

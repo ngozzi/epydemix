@@ -4,10 +4,10 @@ epydemix.calibration package
 Submodules
 ----------
 
-epydemix.calibration.calibration module
----------------------------------------
+epydemix.calibration.abc module
+-------------------------------
 
-.. automodule:: epydemix.calibration.calibration
+.. automodule:: epydemix.calibration.abc
    :members:
    :undoc-members:
    :show-inheritance:
