@@ -8,3 +8,5 @@ scipy==1.10.1
 seaborn==0.13.2
 setuptools==68.2.0
 .
+--extra-index-url https://test.pypi.org/simple
+epydemix
