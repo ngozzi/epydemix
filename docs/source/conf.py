@@ -1,5 +1,6 @@
 import os
 import sys
+import sphinx_rtd_theme
 
 project = 'epydemix'
 copyright = '2025, Nicolò Gozzi'
