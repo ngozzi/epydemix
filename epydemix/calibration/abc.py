@@ -40,7 +40,68 @@ class ABCSampler:
     def calibrate(self, 
             strategy: str = "smc",
             **kwargs) -> CalibrationResults:
-        """Run calibration with specified strategy."""
+        """Run calibration using the specified strategy.
+
+        This function allows the user to run Approximate Bayesian Computation (ABC) calibration
+        using one of the available strategies: Sequential Monte Carlo (SMC), rejection sampling, 
+        or top fraction selection. The appropriate method is selected based on the `strategy` 
+        argument, and additional keyword arguments (`**kwargs`) are passed to the corresponding 
+        function.
+
+        ### Available Strategies:
+        - `"smc"`: Uses Sequential Monte Carlo (ABC-SMC) for calibration.
+        - `"rejection"`: Uses ABC rejection sampling.
+        - `"top_fraction"`: Selects the best fraction of simulated results.
+
+        ### Arguments:
+        - **strategy** (`str`, default: `"smc"`): 
+        Specifies the calibration strategy. Must be one of `{"smc", "rejection", "top_fraction"}`.
+        - **kwargs**: Additional parameters depending on the chosen strategy.
+
+        ### Strategy-Specific Arguments:
+
+        #### `"smc"` (Sequential Monte Carlo)
+        - `num_particles` (`int`, default: `1000`): Number of particles (samples) per generation.
+        - `num_generations` (`int`, default: `10`): Number of generations for the ABC-SMC process.
+        - `epsilon_schedule` (`Optional[List[float]]`, default: `None`): Predefined schedule for epsilon values.
+        - `epsilon_quantile_level` (`float`, default: `0.5`): Quantile level to adapt epsilon if no schedule is provided.
+        - `minimum_epsilon` (`Optional[float]`, default: `None`): Minimum allowable epsilon value.
+        - `max_time` (`Optional[timedelta]`, default: `None`): Maximum allowed runtime.
+        - `total_simulations_budget` (`Optional[int]`, default: `None`): Maximum number of allowed simulations.
+        - `perturbations` (`Optional[Dict[str, Any]]`, default: `None`): Perturbation kernels for parameters.
+        - `verbose` (`bool`, default: `True`): Whether to print progress updates.
+
+        #### `"rejection"` (ABC Rejection Sampling)
+        - `epsilon` (`float`, default: `0.1`): Distance threshold for accepting samples.
+        - `num_particles` (`int`, default: `1000`): Number of accepted samples.
+        - `max_time` (`Optional[timedelta]`, default: `None`): Maximum allowed runtime.
+        - `total_simulations_budget` (`Optional[int]`, default: `None`): Maximum number of allowed simulations.
+        - `verbose` (`bool`, default: `True`): Whether to print progress updates.
+        - `progress_update_interval` (`int`, default: `1000`): Interval at which progress updates are printed.
+
+        #### `"top_fraction"` (ABC Top-Fraction Selection)
+        - `top_fraction` (`float`, default: `0.05`): Fraction of best-fitting simulations to keep.
+        - `Nsim` (`int`, default: `100`): Total number of simulations to run.
+        - `verbose` (`bool`, default: `True`): Whether to print progress updates.
+
+        ### Returns:
+        - `CalibrationResults`: A deep copy of the results from the chosen calibration strategy.
+
+        ### Raises:
+        - `ValueError`: If an unknown strategy is specified.
+
+        Example Usage:
+        ```python
+        # Run SMC calibration with custom parameters
+        results = model.calibrate(strategy="smc", num_particles=500, num_generations=15)
+
+        # Run rejection sampling with a different epsilon threshold
+        results = model.calibrate(strategy="rejection", epsilon=0.05, num_particles=2000)
+
+        # Run top fraction selection with a different fraction
+        results = model.calibrate(strategy="top_fraction", top_fraction=0.1, Nsim=500)
+        ```
+        """
         strategies = {
             "smc": self.run_smc,
             "rejection": self.run_rejection,
