@@ -118,7 +118,7 @@ def plot_quantiles(df_quantiles: pd.DataFrame,
                                   s=10, color=data_color, zorder=3, label=f"observed ({column})")
             if show_legend:
                 pleg.append(p_actual)
-                handles.append("observed ({column})")
+                handles.append(f"observed ({column})")
 
     # Style improvements
     ax.spines["right"].set_visible(False)
