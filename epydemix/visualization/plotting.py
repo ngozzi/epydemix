@@ -113,12 +113,12 @@ def plot_quantiles(df_quantiles: pd.DataFrame,
 
     if show_data and data is not None:
         data_colors = get_black_to_grey(len(columns))
-        for column, data_color in zip(columns, data_colors):
+        for column, data_color, label in zip(columns, data_colors, labels):
             p_actual = ax.scatter(df_quantiles.date.unique(), data[column], 
-                                  s=10, color=data_color, zorder=3, label=f"observed ({column})")
+                                  s=10, color=data_color, zorder=3, label=f"observed ({label})")
             if show_legend:
                 pleg.append(p_actual)
-                handles.append(f"observed ({column})")
+                handles.append(f"observed ({label})")
 
     # Style improvements
     ax.spines["right"].set_visible(False)
