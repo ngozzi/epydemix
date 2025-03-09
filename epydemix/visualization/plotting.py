@@ -5,6 +5,13 @@ import pandas as pd
 from typing import List, Optional, Union, Any, Tuple, Dict
 import matplotlib.dates as mdates
 
+def get_black_to_grey(n):
+    """Generate `n` grayscale colors starting with pure black."""
+    if n < 1:
+        raise ValueError("n must be at least 1")
+    greys = np.linspace(0, 255, n, dtype=int)  
+    greys[0] = 0 
+    return [(g, g, g) for g in greys]
 
 def get_timeseries_data(df_quantiles: pd.DataFrame, 
                         column: str, 
@@ -105,11 +112,13 @@ def plot_quantiles(df_quantiles: pd.DataFrame,
             handles.append(f"{label} ({np.round((1 - lower_q * 2) * 100, 0)}% CI)")
 
     if show_data and data is not None:
-        p_actual = ax.scatter(df_quantiles.date.unique(), data["data"], 
-                            s=10, color="k", zorder=3, label="observed")
-        if show_legend:
-            pleg.append(p_actual)
-            handles.append("observed")
+        data_colors = get_black_to_grey(len(columns))
+        for column, data_color in zip(columns, data_colors):
+            p_actual = ax.scatter(df_quantiles.date.unique(), data[column], 
+                                  s=10, color=data_color, zorder=3, label=f"observed ({column})")
+            if show_legend:
+                pleg.append(p_actual)
+                handles.append("observed ({column})")
 
     # Style improvements
     ax.spines["right"].set_visible(False)
