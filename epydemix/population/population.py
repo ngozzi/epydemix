@@ -579,3 +579,18 @@ def load_epydemix_population(
         population.add_contact_matrix(C_aggr, layer_name=layer_name)
 
     return population
+
+
+def get_available_locations(path_to_data: str = "https://raw.githubusercontent.com/ngozzi/epydemix-data/main/") -> pd.DataFrame: 
+    """
+    Returns a list of available locations.
+
+    Args:
+        path_to_data (str): The path to the directory containing the 'locations.csv' file.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the list of available locations.
+    """
+
+    locations_file = os.path.join(path_to_data, "locations.csv")
+    return pd.read_csv(locations_file)
