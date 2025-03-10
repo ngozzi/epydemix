@@ -36,26 +36,29 @@ Once installed, you can start using **epydemix** in your Python scripts or Jupyt
 ### Example: Creating and running a simple SIR model
 
 ```python
-from epydemix import EpiModel 
+from epydemix import EpiModel
 from epydemix.visualization import plot_quantiles
 
-# Defining a basic SIR model
+# Define a basic SIR model
 model = EpiModel(
-    name='SIR Model',
-    compartments=['S', 'I', 'R'],  # Susceptible, Infected, Recovered
+    name="SIR Model",
+    compartments=["S", "I", "R"],  # Susceptible, Infected, Recovered
 )
-model.add_transition(source='S', target='I', params=(0.3, "I"), kind='mediated')
-model.add_transition(source='I', target='R', params=0.1, kind='spontaneous')
 
-# Running the model
+# Add transitions: infection and recovery
+model.add_transition(source="S", target="I", params=(0.3, "I"), kind="mediated")
+model.add_transition(source="I", target="R", params=0.1, kind="spontaneous")
+
+# Run simulations
 results = model.run_simulations(
     start_date="2024-01-01",
     end_date="2024-04-10",
-    Nsim=100)
+    Nsim=100,
+)
 
-# Plotting the results
-df_quantiles_comps = results.get_quantiles_compartments()
-plot_quantiles(df_quantiles_comps, columns=["I_total", "S_total", "R_total"])
+# Extract and plot quantiles of compartment counts
+df_quantiles = results.get_quantiles_compartments()
+plot_quantiles(df_quantiles, columns=["I_total", "S_total", "R_total"])
 ```
 
 ### Tutorials
@@ -79,15 +82,15 @@ We provide a series of tutorials to help you get started with **epydemix**.
 ```python
 from epydemix.population import load_epydemix_population
 
-# Load population data for the United States with the Mistry 2021 contact matrix
+# Load population data for the United States using the Mistry 2021 contact matrix
 population = load_epydemix_population(
     population_name="United_States",
     contacts_source="mistry_2021",
-    layers=["home", "work", "school", "community"]
+    layers=["home", "work", "school", "community"],
 )
 
-# Use the loaded population in your epidemic model
-model.set_population(population=population)
+# Assign the loaded population to the epidemic model
+model.set_population(population)
 ```
 
 Epydemix can load data either locally from a folder or directly from online sources, making it easy to simulate a wide range of epidemic models on real population data.
