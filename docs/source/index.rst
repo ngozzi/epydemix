@@ -1,7 +1,7 @@
-Welcome to epydemix's documentation!
+Welcome to Epydemix's Documentation!
 ====================================
 
-**Epydemix** is a Python package for epidemic modeling. It provides tools to create, calibrate, and analyze epidemic models, allowing users to simulate the spread of infectious diseases using different compartmental models, contact layers, and calibration techniques. Epydemix is designed to work with the [epydemix-data](https://github.com/ngozzi/epydemix-data/) package to load population and contact matrix data.
+**Epydemix** is a Python package for epidemic modeling. It provides tools to create, calibrate, and analyze epidemic models, allowing users to simulate the spread of infectious diseases using different compartmental models, contact layers, and calibration techniques. 
 
 Features:
 ---------
@@ -30,6 +30,7 @@ We provide a series of tutorials to help you get started with Epydemix:
    :caption: Contents:
 
    epydemix
+   1_Model_Definition_and_Simulation
 
 
 Indices and tables
