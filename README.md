@@ -55,7 +55,7 @@ results = model.run_simulations(
 
 # Plotting the results
 df_quantiles_comps = results.get_quantiles_compartments()
-plot_quantiles(results, columns=["I_total", "S_total", "R_total"])
+plot_quantiles(df_quantiles_comps, columns=["I_total", "S_total", "R_total"])
 ```
 
 ### Tutorials
@@ -77,7 +77,7 @@ We provide a series of tutorials to help you get started with **epydemix**.
 ### Example of Loading Population Data
 
 ```python
-from epydemix.model import load_epydemix_population
+from epydemix.population import load_epydemix_population
 
 # Load population data for the United States with the Mistry 2021 contact matrix
 population = load_epydemix_population(
