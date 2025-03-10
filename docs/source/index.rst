@@ -30,7 +30,6 @@ We provide a series of tutorials to help you get started with Epydemix:
    :caption: Contents:
 
    epydemix
-   1_Model_Definition_and_Simulation
 
 
 Indices and tables
